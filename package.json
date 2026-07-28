@@ -7,7 +7,7 @@
     "build": "turbo build",
     "dev": "turbo dev --parallel",
     "test": "pnpm test:ci-contract && turbo test",
-    "test:ci-contract": "node scripts/verify-ci-e2e.mjs",
+    "test:ci-contract": "node scripts/verify-ci-e2e.mjs && node scripts/verify-ci-publish.mjs",
     "typecheck": "turbo typecheck",
     "db:generate": "pnpm --filter @netsentinel/database prisma:generate",
     "db:migrate": "pnpm --filter @netsentinel/database prisma:migrate"
