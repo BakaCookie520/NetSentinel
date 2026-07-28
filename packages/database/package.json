@@ -1,0 +1,16 @@
+{
+  "name": "@netsentinel/database",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "prisma generate && tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate deploy"
+  },
+  "dependencies": { "@prisma/client": "^6.16.1", "prisma": "^6.16.1" },
+  "devDependencies": { "typescript": "^5.9.2", "vitest": "^3.2.4" }
+}

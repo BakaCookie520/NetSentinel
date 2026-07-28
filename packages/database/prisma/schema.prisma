@@ -1,0 +1,391 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MonitorType {
+  HTTP
+  WEBSOCKET
+  TCP
+  ICMP
+}
+
+enum MonitorStatus {
+  UNKNOWN
+  UP
+  DEGRADED
+  DOWN
+  PAUSED
+}
+
+enum IncidentStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum TriggerType {
+  DOWN
+  RECOVERY
+  MANUAL
+}
+
+enum ApprovalMode {
+  AUTO
+  APPROVAL
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  EXPIRED
+}
+
+enum RunStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  UNKNOWN
+  CANCELLED
+}
+
+enum StepType {
+  SSH
+  HTTP
+  SHELL
+  AGENT_SHELL
+  WEBHOOK
+  EMAIL
+}
+
+enum CredentialType {
+  SSH_PASSWORD
+  SSH_KEY
+  HTTP_BEARER
+  HTTP_BASIC
+  HTTP_API_KEY
+  WS_TOKEN
+  SMTP
+}
+
+enum AgentStatus {
+  OFFLINE
+  ONLINE
+  REVOKED
+}
+
+model User {
+  id           String @id @default(cuid())
+  email        String @unique
+  displayName  String
+  passwordHash String
+  locale       String @default("zh-CN")
+  timezone     String @default("UTC")
+  forcePasswordChange Boolean @default(false)
+  version      Int @default(1)
+  disabledAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  roles        UserRole[]
+  sessions     Session[]
+  apiTokens    ApiToken[]
+  assignedIncidents Incident[] @relation("IncidentAssignee")
+  comments     IncidentComment[]
+}
+
+model Role {
+  id          String @id @default(cuid())
+  name        String @unique
+  description String?
+  permissions String[]
+  system      Boolean @default(false)
+  version     Int @default(1)
+  users       UserRole[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  @@id([userId, roleId])
+}
+
+model Session {
+  idHash String @id
+  userId String
+  csrfHash String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model ApiToken {
+  id String @id @default(cuid())
+  name String
+  tokenHash String @unique
+  scopes String[]
+  userId String
+  expiresAt DateTime?
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+
+model Tag {
+  id String @id @default(cuid())
+  name String @unique
+  color String @default("#1976d2")
+  monitors MonitorTag[]
+}
+
+model Monitor {
+  id String @id @default(cuid())
+  name String
+  type MonitorType
+  target String
+  config Json
+  credentialId String?
+  status MonitorStatus @default(UNKNOWN)
+  enabled Boolean @default(true)
+  intervalSeconds Int @default(60)
+  timeoutMs Int @default(10000)
+  failureThreshold Int @default(3)
+  recoveryThreshold Int @default(2)
+  consecutiveFailures Int @default(0)
+  consecutiveSuccesses Int @default(0)
+  lastCheckedAt DateTime?
+  nextCheckAt DateTime @default(now())
+  lastLatencyMs Int?
+  publicStatusEnabled Boolean @default(false)
+  publicDisplayName String?
+  publicGroup String @default("服务状态")
+  publicOrder Int @default(0)
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tags MonitorTag[]
+  results ProbeResult[]
+  statusDailyMetrics StatusDailyMetric[]
+  incidents Incident[]
+  workflows Workflow[]
+  maintenanceWindows MaintenanceWindow[]
+  credential Credential? @relation(fields: [credentialId], references: [id], onDelete: SetNull)
+  @@index([enabled, nextCheckAt])
+  @@index([status])
+  @@index([credentialId])
+}
+
+model MonitorTag {
+  monitorId String
+  tagId String
+  monitor Monitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  tag Tag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  @@id([monitorId, tagId])
+}
+
+model ProbeResult {
+  id String @id @default(cuid())
+  sourceJobId String? @unique
+  monitorId String
+  ok Boolean
+  latencyMs Int?
+  statusCode Int?
+  errorCode String?
+  errorMessage String?
+  maintenanceSuppressed Boolean @default(false)
+  checkedAt DateTime @default(now())
+  monitor Monitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  @@index([monitorId, checkedAt(sort: Desc)])
+  @@index([checkedAt])
+}
+
+model StatusDailyMetric {
+  monitorId String
+  day DateTime @db.Date
+  successCount Int @default(0)
+  failureCount Int @default(0)
+  monitor Monitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  @@id([monitorId, day])
+  @@index([day])
+}
+
+model Incident {
+  id String @id @default(cuid())
+  monitorId String
+  status IncidentStatus @default(OPEN)
+  title String
+  openedAt DateTime @default(now())
+  acknowledgedAt DateTime?
+  resolvedAt DateTime?
+  assigneeId String?
+  version Int @default(1)
+  monitor Monitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  assignee User? @relation("IncidentAssignee", fields: [assigneeId], references: [id])
+  comments IncidentComment[]
+  runs WorkflowRun[]
+  approvals Approval[]
+  @@index([status, openedAt(sort: Desc)])
+  @@index([monitorId, status])
+}
+
+model IncidentComment {
+  id String @id @default(cuid())
+  incidentId String
+  authorId String
+  body String
+  createdAt DateTime @default(now())
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id])
+}
+
+model Workflow {
+  id String @id @default(cuid())
+  name String
+  monitorId String?
+  trigger TriggerType
+  approvalMode ApprovalMode @default(AUTO)
+  approvalTimeoutMinutes Int @default(15)
+  enabled Boolean @default(true)
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  monitor Monitor? @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  steps WorkflowStep[]
+  runs WorkflowRun[]
+  approvals Approval[]
+  @@index([monitorId, trigger, enabled])
+}
+
+model WorkflowStep {
+  id String @id @default(cuid())
+  workflowId String
+  position Int
+  name String
+  type StepType
+  config Json
+  credentialId String?
+  timeoutMs Int @default(30000)
+  retries Int @default(0)
+  continueOnFailure Boolean @default(false)
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  credential Credential? @relation(fields: [credentialId], references: [id])
+  stepRuns StepRun[]
+  @@unique([workflowId, position])
+}
+
+model Credential {
+  id String @id @default(cuid())
+  name String
+  type CredentialType
+  encrypted Json
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  steps WorkflowStep[]
+  monitors Monitor[]
+}
+
+model WorkflowRun {
+  id String @id @default(cuid())
+  workflowId String
+  incidentId String?
+  trigger TriggerType
+  idempotencyKey String @unique
+  status RunStatus @default(PENDING)
+  startedAt DateTime?
+  finishedAt DateTime?
+  createdAt DateTime @default(now())
+  workflow Workflow @relation(fields: [workflowId], references: [id])
+  incident Incident? @relation(fields: [incidentId], references: [id])
+  steps StepRun[]
+  @@index([status, createdAt])
+}
+
+model StepRun {
+  id String @id @default(cuid())
+  workflowRunId String
+  workflowStepId String
+  attempt Int @default(1)
+  status RunStatus @default(PENDING)
+  output String?
+  errorMessage String?
+  startedAt DateTime?
+  finishedAt DateTime?
+  workflowRun WorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  workflowStep WorkflowStep @relation(fields: [workflowStepId], references: [id])
+  @@index([workflowRunId])
+}
+
+model Approval {
+  id String @id @default(cuid())
+  workflowId String
+  incidentId String
+  status ApprovalStatus @default(PENDING)
+  expiresAt DateTime
+  decidedAt DateTime?
+  decidedById String?
+  createdAt DateTime @default(now())
+  workflow Workflow @relation(fields: [workflowId], references: [id])
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  @@index([status, expiresAt])
+}
+
+model MaintenanceWindow {
+  id String @id @default(cuid())
+  name String
+  monitorId String?
+  startsAt DateTime?
+  endsAt DateTime?
+  cron String?
+  durationMinutes Int?
+  timezone String @default("UTC")
+  enabled Boolean @default(true)
+  version Int @default(1)
+  monitor Monitor? @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+}
+
+model Agent {
+  id String @id @default(cuid())
+  name String
+  status AgentStatus @default(OFFLINE)
+  tokenHash String @unique
+  version String?
+  lastSeenAt DateTime?
+  enrolledAt DateTime?
+  revokedAt DateTime?
+  rowVersion Int @default(1)
+  createdAt DateTime @default(now())
+}
+
+model AuditEvent {
+  id String @id @default(cuid())
+  actorId String?
+  action String
+  resourceType String
+  resourceId String?
+  metadata Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+  @@index([createdAt(sort: Desc)])
+  @@index([resourceType, resourceId])
+}
+
+model Setting {
+  key String @id
+  value Json
+  version Int @default(1)
+  updatedAt DateTime @updatedAt
+}

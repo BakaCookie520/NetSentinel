@@ -1,0 +1,40 @@
+name: Release Linux agent
+
+on:
+  push:
+    tags: ["agent-v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @netsentinel/agent build
+      - name: Assemble package
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#agent-v}"
+          package="netsentinel-agent-${version}"
+          mkdir -p "release/${package}"
+          pnpm --filter @netsentinel/agent deploy --legacy --prod "release/${package}"
+          rm -rf "release/${package}/.turbo" "release/${package}/src" "release/${package}/tsconfig.json"
+          cp infra/agent/netsentinel-agent.service infra/agent/install.sh "release/${package}/"
+          chmod +x "release/${package}/install.sh"
+          tar -C release -czf "release/${package}.tar.gz" "${package}"
+          cd release
+          sha256sum "${package}.tar.gz" > "${package}.tar.gz.sha256"
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" release/*.tar.gz release/*.sha256 --generate-notes --verify-tag

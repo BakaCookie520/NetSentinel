@@ -1,0 +1,32 @@
+{
+  "name": "@netsentinel/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "node --watch --env-file-if-exists=../../.env --import tsx src/main.ts",
+    "start": "node --env-file-if-exists=../../.env dist/main.js",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@netsentinel/contracts": "workspace:*",
+    "@netsentinel/core": "workspace:*",
+    "@netsentinel/database": "workspace:*",
+    "bullmq": "^5.58.5",
+    "cron-parser": "^5.3.1",
+    "ioredis": "^5.7.0",
+    "nodemailer": "^7.0.6",
+    "ssh2": "^1.17.0",
+    "undici": "^7.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.3",
+    "@types/nodemailer": "^7.0.1",
+    "@types/ssh2": "^1.15.5",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

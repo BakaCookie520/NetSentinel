@@ -1,0 +1,81 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: netsentinel
+      POSTGRES_USER: netsentinel
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U netsentinel -d netsentinel"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    image: netsentinel-server:0.1.0
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    command: ["sh", "-c", "pnpm --filter @netsentinel/database prisma:migrate && node apps/api/dist/bootstrap-admin.js && node apps/api/dist/main.js"]
+    environment:
+      DATABASE_URL: postgresql://netsentinel:${POSTGRES_PASSWORD}@postgres:5432/netsentinel
+      REDIS_URL: redis://redis:6379
+      REDIS_HOST: redis
+      NETSENTINEL_MASTER_KEY: ${NETSENTINEL_MASTER_KEY}
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD}
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:8080}
+      COOKIE_SECURE: "false"
+      PORT: 3000
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/v1/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  worker:
+    image: netsentinel-server:0.1.0
+    command: ["node", "apps/worker/dist/main.js"]
+    environment:
+      DATABASE_URL: postgresql://netsentinel:${POSTGRES_PASSWORD}@postgres:5432/netsentinel
+      REDIS_HOST: redis
+      NETSENTINEL_MASTER_KEY: ${NETSENTINEL_MASTER_KEY}
+    cap_add: ["NET_RAW"]
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+
+  web:
+    image: netsentinel-web:0.1.0
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args: { VITE_DEMO_MODE: "false" }
+    ports:
+      - "${NETSENTINEL_HTTP_PORT:-8080}:80"
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:

@@ -1,0 +1,1 @@
+ALTER TYPE "CredentialType" ADD VALUE 'WS_TOKEN';

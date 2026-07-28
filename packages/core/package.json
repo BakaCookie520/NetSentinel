@@ -1,0 +1,21 @@
+{
+  "name": "@netsentinel/core",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@netsentinel/contracts": "workspace:*",
+    "ipaddr.js": "^2.2.0",
+    "jsonpath-plus": "^10.3.0",
+    "re2-wasm": "^1.0.2",
+    "undici": "^7.16.0",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": { "@types/ws": "^8.18.1", "typescript": "^5.9.2", "vitest": "^3.2.4" }
+}

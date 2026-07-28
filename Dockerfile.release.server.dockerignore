@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+.turbo
+coverage
+apps/web
+apps/agent
+apps/api/src
+apps/api/test-results
+apps/worker/src
+*.log
+.env
+.git
+.scratch

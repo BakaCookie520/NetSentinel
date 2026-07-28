@@ -1,0 +1,15 @@
+FROM netsentinel-server:pre-public-status
+
+USER root
+WORKDIR /app
+
+COPY packages/contracts/dist ./packages/contracts/dist
+COPY packages/database/dist ./packages/database/dist
+COPY packages/database/prisma ./packages/database/prisma
+COPY apps/api/dist ./apps/api/dist
+COPY apps/worker/dist ./apps/worker/dist
+
+RUN ln -sfn /app/node_modules/.pnpm/node_modules/cron-parser /app/apps/api/node_modules/cron-parser \
+  && pnpm --filter @netsentinel/database prisma:generate
+
+USER node

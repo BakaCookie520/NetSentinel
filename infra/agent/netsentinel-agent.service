@@ -1,0 +1,21 @@
+[Unit]
+Description=NetSentinel host action agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=netsentinel-agent
+Group=netsentinel-agent
+EnvironmentFile=/etc/netsentinel-agent.env
+ExecStart=/usr/bin/node /opt/netsentinel-agent/dist/main.js
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/netsentinel-agent
+
+[Install]
+WantedBy=multi-user.target

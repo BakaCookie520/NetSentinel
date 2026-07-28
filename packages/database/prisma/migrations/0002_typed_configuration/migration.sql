@@ -1,0 +1,11 @@
+ALTER TYPE "CredentialType" ADD VALUE 'HTTP_API_KEY';
+
+ALTER TABLE "User" ADD COLUMN "version" INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE "Monitor" ADD COLUMN "credentialId" TEXT;
+ALTER TABLE "Credential" ADD COLUMN "version" INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE "MaintenanceWindow" ADD COLUMN "version" INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE "Agent" ADD COLUMN "rowVersion" INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE "Setting" ADD COLUMN "version" INTEGER NOT NULL DEFAULT 1;
+
+CREATE INDEX "Monitor_credentialId_idx" ON "Monitor"("credentialId");
+ALTER TABLE "Monitor" ADD CONSTRAINT "Monitor_credentialId_fkey" FOREIGN KEY ("credentialId") REFERENCES "Credential"("id") ON DELETE SET NULL ON UPDATE CASCADE;
