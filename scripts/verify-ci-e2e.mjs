@@ -2,6 +2,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const workflow = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
+const playwrightConfig = readFileSync(
+  new URL("../apps/web/playwright.config.ts", import.meta.url),
+  "utf8",
+);
+const typedConfigTests = readFileSync(
+  new URL("../apps/web/tests/typed-config.spec.ts", import.meta.url),
+  "utf8",
+);
 const e2eCommand = "pnpm --filter @netsentinel/web test:e2e";
 const e2eIndex = workflow.indexOf(e2eCommand);
 
@@ -41,5 +49,13 @@ for (const prerequisite of [
   );
 }
 
-console.log("CI E2E runtime contract is complete");
+assert(
+  playwrightConfig.includes("workers: process.env.CI ? 1 : undefined"),
+  "Playwright must use one worker in constrained CI runners",
+);
+assert(
+  !typedConfigTests.includes("astrbot.bakacookie520.top"),
+  "E2E tests must not depend on a developer database monitor",
+);
 
+console.log("CI E2E runtime contract is complete");

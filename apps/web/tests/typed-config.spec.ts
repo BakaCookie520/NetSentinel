@@ -208,19 +208,100 @@ test("manual probe stays busy until a fresh result is visible", async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "Desktop manual probe flow");
+  const initialCheckedAt = "2026-07-28T01:00:00.000Z";
+  const completedCheckedAt = "2026-07-28T01:01:00.000Z";
+  const monitor = {
+    id: "monitor-manual-probe",
+    name: "Manual probe fixture",
+    type: "HTTP",
+    target: "https://example.com/health",
+    credentialId: null,
+    intervalSeconds: 60,
+    timeoutMs: 10_000,
+    failureThreshold: 3,
+    recoveryThreshold: 2,
+    tagIds: [],
+    config: {
+      method: "GET",
+      headers: {},
+      expectedStatusMin: 200,
+      expectedStatusMax: 299,
+      verifyTls: true,
+    },
+    publicStatusEnabled: false,
+    publicDisplayName: null,
+    publicGroup: "Service status",
+    publicOrder: 0,
+    status: "UP",
+    latencyMs: 42,
+    lastCheckedAt: initialCheckedAt,
+    tags: [],
+    version: 1,
+    enabled: true,
+    configurationComplete: true,
+    consecutiveFailures: 0,
+    consecutiveSuccesses: 1,
+    results: [],
+  };
+  let completed = false;
+  await page.route("**/api/v1/monitors**", async (route) => {
+    const request = route.request();
+    const pathname = new URL(request.url()).pathname;
+    if (pathname === "/api/v1/monitors" && request.method() === "GET") {
+      await route.fulfill({ json: [monitor] });
+      return;
+    }
+    if (
+      pathname === `/api/v1/monitors/${monitor.id}/check` &&
+      request.method() === "POST"
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      completed = true;
+      await route.fulfill({ json: { queued: true, jobId: "probe-manual" } });
+      return;
+    }
+    if (
+      pathname === `/api/v1/monitors/${monitor.id}` &&
+      request.method() === "GET"
+    ) {
+      await route.fulfill({
+        json: completed
+          ? {
+              ...monitor,
+              lastCheckedAt: completedCheckedAt,
+              consecutiveSuccesses: 2,
+              results: [
+                {
+                  id: "probe-result-manual",
+                  ok: true,
+                  latencyMs: 38,
+                  statusCode: 200,
+                  errorCode: null,
+                  errorMessage: null,
+                  checkedAt: completedCheckedAt,
+                },
+              ],
+            }
+          : monitor,
+      });
+      return;
+    }
+    await route.continue();
+  });
   await login(page);
   await page.getByRole("button", { name: "监控", exact: true }).click();
   await page
     .locator("tbody tr")
-    .filter({ hasText: "https://astrbot.bakacookie520.top/api/v1" })
+    .filter({ hasText: monitor.target })
     .click();
-  await expect(page.getByRole("heading", { name: "11" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: monitor.name }),
+  ).toBeVisible();
   const checkButton = page.getByRole("button", { name: "立即探测" });
   await checkButton.click();
   await expect(page.getByRole("button", { name: "正在探测" })).toBeDisabled();
   await expect(page.getByText(/探测完成/)).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(/最近结果/)).toBeVisible();
-  await expect(page.getByText("系统运行正常", { exact: true })).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath("manual-probe-result.png"),
     fullPage: true,
