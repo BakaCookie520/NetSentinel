@@ -39,6 +39,7 @@ jobs:
       INITIAL_ADMIN_EMAIL: admin@netsentinel.local
       INITIAL_ADMIN_PASSWORD: IntegrationPass123!
       E2E_REAL_PASSWORD: IntegrationPass123!
+      VITE_DEMO_MODE: "false"
       WEB_ORIGIN: http://127.0.0.1:5173
       COOKIE_SECURE: "false"
       PORT: 3000

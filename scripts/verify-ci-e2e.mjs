@@ -2,10 +2,6 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const workflow = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
-const playwrightConfig = readFileSync(
-  new URL("../apps/web/playwright.config.ts", import.meta.url),
-  "utf8",
-);
 const typedConfigTests = readFileSync(
   new URL("../apps/web/tests/typed-config.spec.ts", import.meta.url),
   "utf8",
@@ -29,6 +25,7 @@ for (const requiredEnvironment of [
   "NETSENTINEL_MASTER_KEY:",
   "INITIAL_ADMIN_EMAIL:",
   "INITIAL_ADMIN_PASSWORD:",
+  "VITE_DEMO_MODE:",
 ]) {
   assert(
     workflow.includes(requiredEnvironment),
@@ -49,10 +46,6 @@ for (const prerequisite of [
   );
 }
 
-assert(
-  playwrightConfig.includes("workers: process.env.CI ? 1 : undefined"),
-  "Playwright must use one worker in constrained CI runners",
-);
 assert(
   !typedConfigTests.includes("astrbot.bakacookie520.top"),
   "E2E tests must not depend on a developer database monitor",

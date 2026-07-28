@@ -4,7 +4,6 @@ import { authStatePath } from "./tests/global-setup";
 export default defineConfig({
   testDir: "./tests",
   globalSetup: "./tests/global-setup.ts",
-  workers: process.env.CI ? 1 : undefined,
   webServer: { command: "pnpm dev", url: "http://127.0.0.1:5173", reuseExistingServer: !process.env.CI },
   use: { baseURL: "http://127.0.0.1:5173", storageState: authStatePath, trace: "retain-on-failure" },
   projects: [
