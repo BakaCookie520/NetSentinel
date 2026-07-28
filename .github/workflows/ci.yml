@@ -8,6 +8,40 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: netsentinel
+          POSTGRES_USER: netsentinel
+          POSTGRES_PASSWORD: integration-postgres-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U netsentinel -d netsentinel"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://netsentinel:integration-postgres-password@127.0.0.1:5432/netsentinel
+      REDIS_URL: redis://127.0.0.1:6379
+      REDIS_HOST: 127.0.0.1
+      NETSENTINEL_MASTER_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      INITIAL_ADMIN_EMAIL: admin@netsentinel.local
+      INITIAL_ADMIN_PASSWORD: IntegrationPass123!
+      E2E_REAL_PASSWORD: IntegrationPass123!
+      WEB_ORIGIN: http://127.0.0.1:5173
+      COOKIE_SECURE: "false"
+      PORT: 3000
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -22,4 +56,23 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm build
       - run: pnpm --filter @netsentinel/web exec playwright install --with-deps chromium
+      - name: Prepare E2E database
+        run: |
+          pnpm --filter @netsentinel/database prisma:migrate
+          node apps/api/dist/bootstrap-admin.js
+      - name: Start E2E API
+        run: |
+          nohup node apps/api/dist/main.js > "$RUNNER_TEMP/netsentinel-api.log" 2>&1 &
+          api_pid=$!
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:3000/api/v1/health/ready > /dev/null; then
+              exit 0
+            fi
+            if ! kill -0 "$api_pid" 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/netsentinel-api.log"
+          exit 1
       - run: pnpm --filter @netsentinel/web test:e2e
