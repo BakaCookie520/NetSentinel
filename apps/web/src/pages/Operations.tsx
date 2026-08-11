@@ -86,7 +86,7 @@ function Metric({
   icon: React.ReactNode;
 }) {
   return (
-    <Card variant="outlined">
+    <Card className="metric-card" variant="outlined">
       <CardContent sx={{ p: "16px!important" }}>
         <Stack
           direction="row"
@@ -133,7 +133,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <Paper variant="outlined" sx={{ overflow: "hidden" }}>
+    <Paper className="section-panel" variant="outlined" sx={{ overflow: "hidden" }}>
       <Stack
         direction="row"
         justifyContent="space-between"

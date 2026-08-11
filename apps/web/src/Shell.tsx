@@ -10,6 +10,7 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  ListSubheader,
   Stack,
   Toolbar,
   Tooltip,
@@ -42,7 +43,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
 
-const drawerWidth = 238;
+const drawerWidth = 264;
 const nav = [
   ["/", "dashboard", DashboardOutlined],
   ["/monitors", "monitors", AssessmentOutlined],
@@ -55,6 +56,10 @@ const nav = [
   ["/logs", "logs", ReceiptLongOutlined],
   ["/audit", "audit", HistoryOutlined],
   ["/settings", "settings", SettingsOutlined],
+] as const;
+const navSections = [
+  { label: "operations", items: nav.slice(0, 3) },
+  { label: "administration", items: nav.slice(3) },
 ] as const;
 
 export function Shell({
@@ -78,62 +83,86 @@ export function Shell({
   });
   const apiConnected = health.data?.status === "ready";
   const workerConnected = apiConnected && health.data?.workerConnected === true;
+  const activeNav = nav.find(([path]) =>
+    path === "/" ? location.pathname === "/" : location.pathname.startsWith(path),
+  );
   const drawer = (
-    <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+    <Box className="shell-rail" sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
       <Stack
         direction="row"
         alignItems="center"
         gap={1.25}
-        sx={{ height: 64, px: 2 }}
+        sx={{ height: 72, px: 2.25 }}
       >
         <Box className="brand-mark" sx={{ bgcolor: "primary.main", color: "primary.contrastText" }}>
           <ShieldOutlined fontSize="small" />
         </Box>
         <Box>
-          <Typography fontWeight={800}>NetSentinel</Typography>
-          <Typography variant="caption" color="text.secondary">
-            NETWORK OPERATIONS
+          <Typography fontWeight={800} letterSpacing="-0.03em">NetSentinel</Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ letterSpacing: "0.1em", fontSize: "0.62rem" }}>
+            CONTROL PLANE
           </Typography>
         </Box>
       </Stack>
       <Divider />
-      <List dense sx={{ px: 1, py: 1.5, flex: 1 }}>
-        {nav.map(([path, key, Icon]) => {
-          const selected =
-            path === "/"
-              ? location.pathname === "/"
-              : location.pathname.startsWith(path);
-          return (
-            <ListItemButton
-              key={path}
-              selected={selected}
-              onClick={() => {
-                navigate(path);
-                setMobileOpen(false);
-              }}
-              sx={{ mb: 0.25 }}
-            >
-              <ListItemIcon sx={{ minWidth: 38 }}>
-                <Icon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText
-                primary={t(`nav.${key}`)}
-                primaryTypographyProps={{
-                  fontSize: 14,
-                  fontWeight: selected ? 700 : 500,
-                }}
-              />
-            </ListItemButton>
-          );
-        })}
+      <List dense sx={{ px: 1.25, py: 1.5, flex: 1 }}>
+        {navSections.map((section) => (
+          <Box key={section.label} sx={{ mb: 1 }}>
+            <ListSubheader disableSticky disableGutters sx={{ px: 1 }}>
+              {t(`shell.${section.label}`)}
+            </ListSubheader>
+            {section.items.map(([path, key, Icon]) => {
+              const selected =
+                path === "/"
+                  ? location.pathname === "/"
+                  : location.pathname.startsWith(path);
+              return (
+                <ListItemButton
+                  key={path}
+                  selected={selected}
+                  onClick={() => {
+                    navigate(path);
+                    setMobileOpen(false);
+                  }}
+                  sx={{
+                    mb: 0.25,
+                    "&.Mui-selected": {
+                      bgcolor: "primary.main",
+                      color: "primary.contrastText",
+                      boxShadow: (currentTheme) =>
+                        `0 8px 18px ${currentTheme.palette.primary.main}33`,
+                      "&:hover": { bgcolor: "primary.main" },
+                      "& .MuiListItemIcon-root": { color: "inherit" },
+                    },
+                  }}
+                >
+                  <ListItemIcon sx={{ minWidth: 38 }}>
+                    <Icon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={t(`nav.${key}`)}
+                    primaryTypographyProps={{
+                      fontSize: 14,
+                      fontWeight: selected ? 700 : 550,
+                    }}
+                  />
+                </ListItemButton>
+              );
+            })}
+          </Box>
+        ))}
       </List>
       <Box
+        className="system-pulse"
         sx={{
-          m: 1.5,
+          m: 1.75,
           p: 1.5,
+          pl: 1.75,
           border: 1,
           borderColor: "divider",
-          borderRadius: 1,
+          borderRadius: 2,
+          color: health.isError ? "error.main" : workerConnected ? "success.main" : "warning.main",
+          bgcolor: "background.paper",
         }}
       >
         <Stack direction="row" gap={1} alignItems="center">
@@ -144,7 +173,7 @@ export function Shell({
             fontSize="small"
           />
           <Box>
-            <Typography variant="body2" fontWeight={700}>
+            <Typography variant="body2" fontWeight={750} color="text.primary">
               {health.isError
                 ? t("shell.disconnected")
                 : workerConnected
@@ -165,6 +194,7 @@ export function Shell({
   );
   return (
     <Box sx={{ display: "flex", minHeight: "100vh" }}>
+      <a className="skip-link" href="#main-content">{t("shell.skipToContent")}</a>
       <AppBar
         position="fixed"
         color="inherit"
@@ -191,9 +221,19 @@ export function Shell({
             gap={1}
             sx={{ flex: 1, minWidth: 0 }}
           >
-            <DnsOutlined color="primary" fontSize="small" />
-            <Typography variant="body2" color="text.secondary" noWrap>
-              {t("shell.node")}
+            <Box sx={{ display: "grid", placeItems: "center", width: 28, height: 28, borderRadius: 1.5, bgcolor: "action.hover", color: "primary.main" }}>
+              <DnsOutlined fontSize="small" />
+            </Box>
+            <Box minWidth={0}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.1 }}>
+                {t("shell.currentView")}
+              </Typography>
+              <Typography variant="body2" fontWeight={700} noWrap>
+                {activeNav ? t(`nav.${activeNav[1]}`) : t("shell.node")}
+              </Typography>
+            </Box>
+            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: { xs: "none", sm: "block" }, ml: 0.5 }}>
+              · {t("shell.node")}
             </Typography>
           </Stack>
           <Stack direction="row" alignItems="center" gap={0.5}>
@@ -255,6 +295,7 @@ export function Shell({
       </Box>
       <Box
         component="main"
+        id="main-content"
         sx={{
           flex: 1,
           width: { xs: "100%", md: `calc(100% - ${drawerWidth}px)` },

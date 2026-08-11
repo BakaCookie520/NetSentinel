@@ -9,8 +9,8 @@ const statusMap: Record<MonitorStatus, { color: "success" | "warning" | "error" 
 export function StatusChip({ status }: { status: MonitorStatus }) { const { t } = useTranslation(); const item = statusMap[status]; return <Chip size="small" variant={status === "UP" ? "outlined" : "filled"} color={item.color} label={t(`status.${status}`)} />; }
 
 export function PageHeader({ title, subtitle, action }: { title: string; subtitle: string; action?: ReactNode }) {
-  return <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "center" }} gap={2} sx={{ mb: 2.5 }}>
-    <Box><Typography variant="h1">{title}</Typography><Typography color="text.secondary" sx={{ mt: 0.5 }}>{subtitle}</Typography></Box>{action}
+  return <Stack className="page-header" direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "center" }} gap={2} sx={{ mb: 3 }}>
+    <Box><Typography variant="h1" sx={{ textWrap: "balance" }}>{title}</Typography><Typography color="text.secondary" sx={{ mt: 0.65 }}>{subtitle}</Typography></Box>{action}
   </Stack>;
 }
 

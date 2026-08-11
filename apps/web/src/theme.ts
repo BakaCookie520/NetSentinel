@@ -1,4 +1,4 @@
-import { createTheme, type PaletteMode } from "@mui/material/styles";
+import { alpha, createTheme, type PaletteMode } from "@mui/material/styles";
 
 export type ThemeColor = "sky" | "teal" | "indigo" | "amber" | "rose";
 
@@ -155,6 +155,10 @@ export function setThemeColorPreference(value: ThemeColor) {
 export const buildTheme = (mode: PaletteMode, color: ThemeColor = "sky") => {
   const colorOption = THEME_COLOR_OPTIONS.find((option) => option.value === color) ?? THEME_COLOR_OPTIONS[0];
   const tokens = colorOption[mode];
+  const isLight = mode === "light";
+  const surfaceShadow = isLight
+    ? `0 18px 45px ${alpha(tokens.primary.dark, 0.08)}`
+    : `0 20px 48px ${alpha("#000000", 0.24)}`;
   return createTheme({
     palette:
       mode === "light"
@@ -180,20 +184,110 @@ export const buildTheme = (mode: PaletteMode, color: ThemeColor = "sky") => {
             text: tokens.text,
             divider: tokens.divider,
           },
-    shape: { borderRadius: 6 },
+    shape: { borderRadius: 12 },
     typography: {
       fontFamily:
-        'Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
-      h1: { fontSize: "1.65rem", fontWeight: 700, letterSpacing: 0 },
-      h2: { fontSize: "1.15rem", fontWeight: 700, letterSpacing: 0 },
-      h3: { fontSize: "1rem", fontWeight: 700, letterSpacing: 0 },
-      button: { textTransform: "none", fontWeight: 650, letterSpacing: 0 },
-      allVariants: { letterSpacing: 0 },
+        '"Aptos", "Noto Sans SC", "Microsoft YaHei UI", "PingFang SC", sans-serif',
+      h1: {
+        fontSize: "clamp(1.7rem, 1.2rem + 1.1vw, 2.35rem)",
+        fontWeight: 760,
+        letterSpacing: "-0.045em",
+        lineHeight: 1.08,
+      },
+      h2: { fontSize: "1.08rem", fontWeight: 720, letterSpacing: "-0.018em", lineHeight: 1.25 },
+      h3: { fontSize: "0.95rem", fontWeight: 700, letterSpacing: "-0.01em" },
+      body2: { lineHeight: 1.55 },
+      button: { textTransform: "none", fontWeight: 700, letterSpacing: "-0.01em" },
+      allVariants: { letterSpacing: "-0.005em" },
     },
     components: {
+      MuiButton: {
+        defaultProps: { disableElevation: true },
+        styleOverrides: {
+          root: {
+            minHeight: 38,
+            borderRadius: 9,
+            transition: "transform 160ms ease, background-color 160ms ease, border-color 160ms ease",
+            "&:hover": { transform: "translateY(-1px)" },
+            "&:active": { transform: "translateY(0)" },
+          },
+          contained: {
+            boxShadow: `0 8px 18px ${alpha(tokens.primary.dark, isLight ? 0.2 : 0.16)}`,
+          },
+          outlined: {
+            borderColor: alpha(tokens.primary.main, isLight ? 0.28 : 0.46),
+          },
+        },
+      },
+      MuiIconButton: {
+        styleOverrides: {
+          root: {
+            borderRadius: 9,
+            transition: "transform 160ms ease, background-color 160ms ease",
+            "&:hover": { transform: "translateY(-1px)" },
+            "&:active": { transform: "translateY(0)" },
+          },
+        },
+      },
+      MuiPaper: {
+        styleOverrides: {
+          root: { backgroundImage: "none" },
+          outlined: {
+            borderColor: alpha(tokens.divider, 0.9),
+            boxShadow: `0 1px 0 ${alpha("#ffffff", isLight ? 0.74 : 0.03)} inset`,
+          },
+        },
+      },
+      MuiCard: {
+        styleOverrides: {
+          root: {
+            borderRadius: 16,
+            boxShadow: surfaceShadow,
+            border: `1px solid ${alpha(tokens.divider, 0.78)}`,
+          },
+        },
+      },
+      MuiTableCell: {
+        styleOverrides: {
+          head: {
+            fontWeight: 700,
+            color: tokens.text.secondary,
+            backgroundColor: tokens.tableHead,
+            letterSpacing: "0.02em",
+            fontSize: "0.73rem",
+          },
+        },
+      },
+      MuiChip: {
+        styleOverrides: {
+          root: {
+            borderRadius: 7,
+            fontWeight: 700,
+            letterSpacing: "0.01em",
+          },
+        },
+      },
+      MuiTextField: {
+        defaultProps: { variant: "outlined" },
+      },
+      MuiOutlinedInput: {
+        styleOverrides: {
+          root: {
+            borderRadius: 10,
+            transition: "box-shadow 160ms ease",
+            "&.Mui-focused": {
+              boxShadow: `0 0 0 3px ${alpha(tokens.primary.main, isLight ? 0.13 : 0.2)}`,
+            },
+          },
+        },
+      },
       MuiCssBaseline: {
         styleOverrides: {
           html: { colorScheme: mode },
+          body: {
+            fontFeatureSettings: '"ss01" 1, "ss02" 1',
+            fontVariantNumeric: "tabular-nums",
+          },
           "*": {
             scrollbarWidth: "thin",
             scrollbarColor: `${tokens.scrollbar} transparent`,
@@ -213,27 +307,6 @@ export const buildTheme = (mode: PaletteMode, color: ThemeColor = "sky") => {
           "*::-webkit-scrollbar-button": { display: "none", width: 0, height: 0 },
           "*::-webkit-scrollbar-corner": { backgroundColor: "transparent" },
         },
-      },
-      MuiButton: {
-        defaultProps: { disableElevation: true },
-        styleOverrides: { root: { minHeight: 36 } },
-      },
-      MuiIconButton: { styleOverrides: { root: { borderRadius: 6 } } },
-      MuiPaper: { styleOverrides: { root: { backgroundImage: "none" } } },
-      MuiCard: {
-        styleOverrides: { root: { borderRadius: 6, boxShadow: "none" } },
-      },
-      MuiTableCell: {
-        styleOverrides: {
-          head: {
-            fontWeight: 700,
-            color: tokens.text.secondary,
-            backgroundColor: tokens.tableHead,
-          },
-        },
-      },
-      MuiChip: {
-        styleOverrides: { root: { borderRadius: 4, fontWeight: 650 } },
       },
     },
   });

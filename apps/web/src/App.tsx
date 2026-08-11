@@ -69,6 +69,7 @@ function LoginPage({ onLogin }: { onLogin: () => void }) {
       }}
     >
       <Box
+        className="login-intro"
         sx={{
           display: { xs: "none", md: "grid" },
           gridTemplateRows: "auto minmax(min-content, 1fr) auto",
@@ -84,7 +85,7 @@ function LoginPage({ onLogin }: { onLogin: () => void }) {
         }}
       >
         <Stack direction="row" gap={1.25} alignItems="center">
-          <Box className="brand-mark" sx={{ bgcolor: "primary.main", color: "primary.contrastText" }}>
+          <Box className="brand-mark brand-mark--large" sx={{ bgcolor: "primary.main", color: "primary.contrastText" }}>
             <ShieldOutlined />
           </Box>
           <Typography variant="h2" color="inherit">
@@ -94,10 +95,11 @@ function LoginPage({ onLogin }: { onLogin: () => void }) {
         <Box sx={{ width: "100%", maxWidth: 520, alignSelf: "center" }}>
           <Typography
             sx={{
-              fontSize: { md: 28, lg: 34 },
-              lineHeight: 1.2,
-              fontWeight: 760,
-              letterSpacing: 0,
+              fontSize: { md: 30, lg: 40 },
+              lineHeight: 1.08,
+              fontWeight: 780,
+              letterSpacing: "-0.05em",
+              textWrap: "balance",
             }}
           >
             在连接中断时，执行经过授权的恢复动作。
@@ -177,6 +179,7 @@ function LoginPage({ onLogin }: { onLogin: () => void }) {
           )}
           <Paper
             component="form"
+            className="login-card"
             variant="outlined"
             onSubmit={submit}
             sx={{ p: { xs: 2, sm: 3 } }}
