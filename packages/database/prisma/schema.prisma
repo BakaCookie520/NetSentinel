@@ -1,5 +1,8 @@
 generator client {
   provider = "prisma-client-js"
+  // The build image can detect a different OpenSSL target than the final
+  // Bookworm runtime under BuildKit. Keep the runtime engine in the client.
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
