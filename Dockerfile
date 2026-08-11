@@ -15,6 +15,9 @@ ENV VITE_DEMO_MODE=${VITE_DEMO_MODE}
 RUN pnpm turbo typecheck --filter=@netsentinel/api... --filter=@netsentinel/worker... --filter=@netsentinel/web...
 RUN pnpm turbo test --filter=@netsentinel/api... --filter=@netsentinel/worker... --filter=@netsentinel/web...
 RUN pnpm turbo build --filter=@netsentinel/api... --filter=@netsentinel/worker... --filter=@netsentinel/web...
+# Prisma's generated native query engine must match the Debian runtime image,
+# rather than any cached local build artifacts from another platform.
+RUN pnpm --filter @netsentinel/database prisma:generate
 
 FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
