@@ -60,7 +60,7 @@ services:
     restart: unless-stopped
 
   worker:
-    image: netsentinel:0.1.0
+    image: ${NETSENTINEL_IMAGE:-ghcr.nju.edu.cn/bakacookie520/netsentinel:latest}
     command: ["node", "apps/worker/dist/main.js"]
     environment:
       DATABASE_URL: postgresql://netsentinel:${POSTGRES_PASSWORD}@postgres:5432/netsentinel
