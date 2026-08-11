@@ -50,8 +50,10 @@ test("mobile navigation exposes incident response", async ({ page }, testInfo) =
 test("desktop supports dark theme and English locale", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "Desktop appearance flow");
   await login(page);
-  await page.getByRole("button", { name: "切换主题" }).click();
+  await page.getByRole("button", { name: "外观" }).click();
+  await page.getByRole("menuitem", { name: "深色模式" }).click();
   await page.getByRole("button", { name: "切换语言" }).click();
+  await page.getByRole("menuitem", { name: "English" }).click();
   await expect(page.getByRole("heading", { name: "Operations overview" })).toBeVisible();
   await expect(page.locator("body")).toHaveCSS("background-color", "rgb(16, 24, 32)");
   await page.screenshot({ path: testInfo.outputPath("dashboard-dark-en.png"), fullPage: true });

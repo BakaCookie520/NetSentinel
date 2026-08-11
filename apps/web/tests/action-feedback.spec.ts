@@ -171,10 +171,12 @@ test("failed row command shows Problem Details and becomes usable again", async 
     page.getByText("Workflow has execution history and cannot be deleted"),
   ).toBeHidden();
   await page.getByRole("button", { name: "切换语言" }).click();
+  await page.getByRole("menuitem", { name: "English" }).click();
   await expect(
     page.getByText("Workflow has execution history and cannot be deleted"),
   ).toBeVisible();
   await page.getByRole("button", { name: "Switch language" }).click();
+  await page.getByRole("menuitem", { name: "简体中文" }).click();
   await expect(localizedError).toBeVisible();
   await expect(remove).toBeEnabled();
   await expect(localizedError).toBeHidden({ timeout: 9_500 });
