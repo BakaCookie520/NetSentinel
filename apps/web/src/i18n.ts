@@ -159,4 +159,51 @@ const en = {
 };
 
 void i18n.use(initReactI18next).init({ resources: { "zh-CN": { translation: zh }, "en-US": { translation: en } }, lng: localStorage.getItem("netsentinel.locale") ?? "zh-CN", fallbackLng: "zh-CN", interpolation: { escapeValue: false } });
+
+i18n.addResources("zh-CN", "translation", {
+  shell: {
+    appearance: "外观",
+    appearanceOptions: { light: "浅色模式", dark: "深色模式", system: "跟随系统" },
+    account: "账户菜单",
+    logout: "退出登录",
+  },
+  profile: {
+    open: "个人资料",
+    title: "个人资料",
+    subtitle: "更新你的显示信息和头像。",
+    displayName: "显示名称",
+    email: "账户邮箱",
+    upload: "上传头像",
+    remove: "移除头像",
+    avatarHint: "支持 PNG、JPEG、WebP，最大 2 MB。",
+    avatarTooLarge: "头像不能超过 2 MB。",
+    avatarInvalid: "请选择 PNG、JPEG 或 WebP 图片。",
+    avatarError: "头像更新失败，请稍后重试。",
+    saveError: "资料保存失败，请稍后重试。",
+    saving: "保存中…",
+  },
+});
+i18n.addResources("en-US", "translation", {
+  shell: {
+    appearance: "Appearance",
+    appearanceOptions: { light: "Light mode", dark: "Dark mode", system: "Use system setting" },
+    account: "Account menu",
+    logout: "Sign out",
+  },
+  profile: {
+    open: "Profile",
+    title: "Profile",
+    subtitle: "Update your display information and avatar.",
+    displayName: "Display name",
+    email: "Account email",
+    upload: "Upload avatar",
+    remove: "Remove avatar",
+    avatarHint: "PNG, JPEG, or WebP up to 2 MB.",
+    avatarTooLarge: "Avatar must be 2 MB or smaller.",
+    avatarInvalid: "Choose a PNG, JPEG, or WebP image.",
+    avatarError: "Could not update the avatar. Try again later.",
+    saveError: "Could not save your profile. Try again later.",
+    saving: "Saving…",
+  },
+});
 export default i18n;

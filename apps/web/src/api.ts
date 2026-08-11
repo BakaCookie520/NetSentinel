@@ -192,6 +192,7 @@ export interface User {
   id: string;
   email: string;
   displayName: string;
+  avatarUrl?: string | null;
   locale: "zh-CN" | "en-US";
   timezone: string;
   version: number;
@@ -210,6 +211,15 @@ export interface Setting {
   key: string;
   value: unknown;
   version: number;
+}
+
+export interface CurrentUser {
+  id: string;
+  email: string;
+  displayName: string;
+  avatarUrl: string | null;
+  permissions: string[];
+  authentication?: "session" | "token";
 }
 
 export class ApiError extends Error {
@@ -269,6 +279,26 @@ const json = (method: string, body?: unknown): RequestInit => ({
   ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
 });
 
+async function requestMultipart<T>(path: string, body: FormData): Promise<T> {
+  const response = await fetch(`/api/v1${path}`, {
+    method: "POST",
+    body,
+    credentials: "include",
+    headers: csrfToken ? { "x-csrf-token": csrfToken } : undefined,
+  });
+  if (!response.ok) {
+    const problem = (await response.json().catch(() => ({}))) as {
+      detail?: string;
+      title?: string;
+    };
+    throw new ApiError(
+      problem.detail ?? problem.title ?? `Request failed (${response.status})`,
+      response.status,
+    );
+  }
+  return response.json() as Promise<T>;
+}
+
 export const api = {
   isDemo: demo,
   async health() {
@@ -291,6 +321,7 @@ export const api = {
         id: string;
         email: string;
         displayName: string;
+        avatarUrl: string | null;
         permissions: string[];
       };
       csrfToken: string;
@@ -298,6 +329,45 @@ export const api = {
     csrfToken = result.csrfToken;
     sessionStorage.setItem("netsentinel.csrf", csrfToken);
     return result;
+  },
+  async me() {
+    if (demo) {
+      return {
+        user: {
+          id: "demo",
+          email: "admin@netsentinel.local",
+          displayName: "管理员",
+          avatarUrl: null,
+          permissions: ["*"],
+          authentication: "session" as const,
+        },
+      };
+    }
+    return request<{ user: CurrentUser }>("/auth/me");
+  },
+  async updateProfile(displayName: string) {
+    if (demo) {
+      return { user: { ...(await this.me()).user, displayName } };
+    }
+    return request<{ user: CurrentUser }>(
+      "/auth/me",
+      json("PATCH", { displayName }),
+    );
+  },
+  async uploadAvatar(file: File) {
+    if (demo) return { user: (await this.me()).user };
+    const body = new FormData();
+    body.append("avatar", file);
+    return requestMultipart<{ user: CurrentUser }>("/auth/me/avatar", body);
+  },
+  async deleteAvatar() {
+    if (demo) return { user: (await this.me()).user };
+    return request<{ user: CurrentUser }>("/auth/me/avatar", { method: "DELETE" });
+  },
+  async logout() {
+    if (!demo) await request<{ ok: true }>("/auth/logout", { method: "POST" });
+    sessionStorage.removeItem("netsentinel.user");
+    sessionStorage.removeItem("netsentinel.csrf");
   },
   async dashboard() {
     if (demo)

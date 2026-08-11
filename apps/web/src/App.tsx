@@ -23,6 +23,11 @@ import {
 } from "./theme";
 import { ActionFeedbackProvider } from "./action-feedback";
 import { Shell } from "./Shell";
+import {
+  isThemePreference,
+  resolveThemeMode,
+  type ThemePreference,
+} from "./theme-preference";
 import { DashboardPage, IncidentsPage, MonitorsPage } from "./pages/Operations";
 import { LogsPage } from "./pages/Logs";
 import { PublicStatusPage } from "./pages/PublicStatus";
@@ -36,6 +41,32 @@ import {
   WorkflowsPage,
 } from "./pages/Management";
 
+function storedThemePreference(): ThemePreference {
+  const value = localStorage.getItem("netsentinel.theme");
+  return isThemePreference(value) ? value : "system";
+}
+
+function transitionTheme(update: () => void, origin?: HTMLElement): void {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    update();
+    return;
+  }
+  const root = document.documentElement;
+  if (origin) {
+    const rect = origin.getBoundingClientRect();
+    root.style.setProperty("--theme-origin-x", `${rect.left + rect.width / 2}px`);
+    root.style.setProperty("--theme-origin-y", `${rect.top + rect.height / 2}px`);
+  }
+  const documentWithTransition = document as Document & {
+    startViewTransition?: (callback: () => void) => unknown;
+  };
+  if (documentWithTransition.startViewTransition) {
+    documentWithTransition.startViewTransition(update);
+  } else {
+    update();
+  }
+}
+
 function LoginPage({ onLogin }: { onLogin: () => void }) {
   const [email, setEmail] = useState("admin@netsentinel.local");
   const [password, setPassword] = useState(api.isDemo ? "NetSentinel123!" : "");
@@ -48,6 +79,7 @@ function LoginPage({ onLogin }: { onLogin: () => void }) {
     try {
       const result = await api.login(email, password);
       sessionStorage.setItem("netsentinel.user", JSON.stringify(result.user));
+      window.dispatchEvent(new CustomEvent("netsentinel:user", { detail: result.user }));
       onLogin();
     } catch {
       setError("无法登录，请检查账号、密码和 API 连接。");
@@ -237,11 +269,12 @@ function LoginPage({ onLogin }: { onLogin: () => void }) {
 }
 
 export function App() {
-  const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const [mode, setMode] = useState<"light" | "dark">(
-    (localStorage.getItem("netsentinel.theme") as "light" | "dark" | null) ??
-      (systemDark ? "dark" : "light"),
+  const [themePreference, setThemePreferenceState] =
+    useState<ThemePreference>(storedThemePreference);
+  const [systemDark, setSystemDark] = useState(() =>
+    window.matchMedia("(prefers-color-scheme: dark)").matches,
   );
+  const mode = resolveThemeMode(themePreference, systemDark);
   const [authenticated, setAuthenticated] = useState(
     Boolean(sessionStorage.getItem("netsentinel.user")),
   );
@@ -283,12 +316,21 @@ export function App() {
     window.addEventListener("netsentinel:theme-color", onThemeColor);
     return () => window.removeEventListener("netsentinel:theme-color", onThemeColor);
   }, []);
-  const toggleMode = () =>
-    setMode((current) => {
-      const next = current === "light" ? "dark" : "light";
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = (event: MediaQueryListEvent) => setSystemDark(event.matches);
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
+  const setThemePreference = (
+    next: ThemePreference,
+    origin?: HTMLElement,
+  ) => {
+    transitionTheme(() => {
       localStorage.setItem("netsentinel.theme", next);
-      return next;
-    });
+      setThemePreferenceState(next);
+    }, origin);
+  };
   return (
     <ThemeProvider theme={buildTheme(mode, themeColor)}>
       <CssBaseline />
@@ -300,7 +342,10 @@ export function App() {
             path="/"
             element={
               authenticated ? (
-                <Shell mode={mode} toggleMode={toggleMode} />
+                <Shell
+                  themePreference={themePreference}
+                  setThemePreference={setThemePreference}
+                />
               ) : (
                 <LoginPage onLogin={() => setAuthenticated(true)} />
               )

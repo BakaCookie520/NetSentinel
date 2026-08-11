@@ -1,5 +1,7 @@
-import { BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get, Header, Inject, MessageEvent, NotFoundException, Param, Patch, Post, Put, Query, Req, Res, Sse } from "@nestjs/common";
+import { BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get, Header, Inject, MessageEvent, NotFoundException, Param, Patch, Post, Put, Query, Req, Res, Sse, UploadedFile, UseInterceptors } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import type { Response } from "express";
+import { memoryStorage } from "multer";
 import { randomBytes } from "node:crypto";
 import { map, type Observable } from "rxjs";
 import { z } from "zod";
@@ -9,6 +11,7 @@ import { ApprovalStatus, CredentialType, IncidentStatus, MonitorStatus, Prisma, 
 import { AuthService, Public, RequirePermissions, type AuthenticatedRequest, digest, hashPassword } from "./auth.js";
 import { PrismaService } from "./prisma.service.js";
 import { EventStreamService, QueueService, metrics } from "./services.js";
+import { readAvatar, removeAvatar, saveAvatar } from "./avatar-storage.js";
 
 const parse = <T>(schema: z.ZodType<T>, value: unknown): T => {
   const result = schema.safeParse(value);
@@ -78,7 +81,10 @@ const maintenanceInputSchema = z.object({ name: z.string().trim().min(1).max(120
 
 @Controller("auth")
 export class AuthController {
-  constructor(@Inject(AuthService) private readonly auth: AuthService) {}
+  constructor(
+    @Inject(AuthService) private readonly auth: AuthService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+  ) {}
   @Public() @Post("login")
   async login(@Body() body: unknown, @Res({ passthrough: true }) response: Response) {
     const input = parse(z.object({ email: z.string().email(), password: z.string().min(8) }), body);
@@ -92,6 +98,82 @@ export class AuthController {
     return { ok: true };
   }
   @Get("me") me(@Req() request: AuthenticatedRequest) { return { user: request.principal }; }
+  @Patch("me")
+  async updateProfile(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
+    const input = parse(z.object({ displayName: z.string().trim().min(1).max(120) }), body);
+    const user = await this.prisma.user.update({
+      where: { id: request.principal!.id },
+      data: { displayName: input.displayName, version: { increment: 1 } },
+      include: { roles: { include: { role: true } } },
+    });
+    return {
+      user: this.auth.principal(
+        user,
+        request.principal!.authentication,
+        request.principal!.permissions,
+      ),
+    };
+  }
+  @Post("me/avatar")
+  @UseInterceptors(
+    FileInterceptor("avatar", {
+      storage: memoryStorage(),
+      limits: { fileSize: 2 * 1024 * 1024, files: 1 },
+    }),
+  )
+  async uploadAvatar(
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    if (!file) throw new BadRequestException("Avatar image is required");
+    const avatarKey = await saveAvatar(file.buffer);
+    const user = await this.prisma.user.update({
+      where: { id: request.principal!.id },
+      data: { avatarKey, version: { increment: 1 } },
+      include: { roles: { include: { role: true } } },
+    });
+    await removeAvatar(request.principal!.avatarUrl ? new URL(request.principal!.avatarUrl, "http://localhost").searchParams.get("v") : null);
+    return {
+      user: this.auth.principal(
+        user,
+        request.principal!.authentication,
+        request.principal!.permissions,
+      ),
+    };
+  }
+  @Delete("me/avatar")
+  async deleteAvatar(@Req() request: AuthenticatedRequest) {
+    const current = await this.prisma.user.findUniqueOrThrow({
+      where: { id: request.principal!.id },
+      select: { avatarKey: true },
+    });
+    const user = await this.prisma.user.update({
+      where: { id: request.principal!.id },
+      data: { avatarKey: null, version: { increment: 1 } },
+      include: { roles: { include: { role: true } } },
+    });
+    await removeAvatar(current.avatarKey);
+    return {
+      user: this.auth.principal(
+        user,
+        request.principal!.authentication,
+        request.principal!.permissions,
+      ),
+    };
+  }
+  @Get("me/avatar")
+  async avatar(@Req() request: AuthenticatedRequest, @Res() response: Response) {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: request.principal!.id },
+      select: { avatarKey: true },
+    });
+    if (!user.avatarKey) throw new NotFoundException();
+    const avatar = await readAvatar(user.avatarKey);
+    response
+      .setHeader("cache-control", "private, max-age=300")
+      .type(avatar.image.contentType)
+      .send(avatar.buffer);
+  }
 }
 
 @Controller()

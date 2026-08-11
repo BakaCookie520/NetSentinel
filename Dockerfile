@@ -25,6 +25,8 @@ WORKDIR /app
 RUN corepack enable \
   && apt-get update \
   && apt-get install -y --no-install-recommends openssh-client iputils-ping ca-certificates \
+  && mkdir -p /app/data \
+  && chown node:node /app/data \
   && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production

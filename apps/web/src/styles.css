@@ -28,6 +28,33 @@ button, a, input, textarea, [role="button"] {
   outline-offset: 3px;
 }
 
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 420ms;
+  animation-timing-function: cubic-bezier(.22, 1, .36, 1);
+}
+
+::view-transition-old(root) {
+  animation-name: theme-old-fade;
+}
+
+::view-transition-new(root) {
+  animation-name: theme-reveal;
+}
+
+@keyframes theme-old-fade {
+  to { opacity: 0.92; }
+}
+
+@keyframes theme-reveal {
+  from {
+    clip-path: circle(0 at var(--theme-origin-x, 50%) var(--theme-origin-y, 50%));
+  }
+  to {
+    clip-path: circle(150vmax at var(--theme-origin-x, 50%) var(--theme-origin-y, 50%));
+  }
+}
+
 .skip-link {
   position: fixed;
   z-index: 1500;
@@ -129,6 +156,17 @@ button, a, input, textarea, [role="button"] {
   transform: translateX(2px);
 }
 
+.MuiMenu-paper,
+.MuiDrawer-paper {
+  animation: surface-enter 180ms cubic-bezier(.22, 1, .36, 1);
+  transform-origin: top right;
+}
+
+@keyframes surface-enter {
+  from { opacity: 0; transform: translateY(-6px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 .system-pulse {
   position: relative;
   overflow: hidden;
@@ -174,5 +212,10 @@ button, a, input, textarea, [role="button"] {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
+  }
+
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
   }
 }

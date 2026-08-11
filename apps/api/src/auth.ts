@@ -13,6 +13,7 @@ export interface Principal {
   id: string;
   email: string;
   displayName: string;
+  avatarUrl: string | null;
   permissions: Permission[];
   authentication: "session" | "token";
 }
@@ -24,9 +25,39 @@ export async function hashPassword(password: string): Promise<string> {
   return hash(password, { algorithm: Algorithm.Argon2id, memoryCost: 19_456, timeCost: 2, parallelism: 1 });
 }
 
+function avatarUrl(avatarKey: string | null): string | null {
+  return avatarKey ? `/api/v1/auth/me/avatar?v=${encodeURIComponent(avatarKey)}` : null;
+}
+
 @Injectable()
 export class AuthService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+
+  principal(
+    user: {
+      id: string;
+      email: string;
+      displayName: string;
+      avatarKey: string | null;
+      roles: Array<{ role: { permissions: string[] } }>;
+    },
+    authentication: "session" | "token",
+    tokenScopes?: string[],
+  ): Principal {
+    const granted = new Set(user.roles.flatMap(({ role }) => role.permissions));
+    const permissions =
+      authentication === "token"
+        ? (tokenScopes?.filter((scope) => granted.has(scope)) ?? []) as Permission[]
+        : [...granted] as Permission[];
+    return {
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      avatarUrl: avatarUrl(user.avatarKey),
+      permissions,
+      authentication,
+    };
+  }
 
   async login(email: string, password: string): Promise<{ principal: Principal; session: string; csrf: string }> {
     const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase() }, include: { roles: { include: { role: true } } } });
@@ -34,8 +65,7 @@ export class AuthService {
     const session = randomBytes(32).toString("base64url");
     const csrf = randomBytes(24).toString("base64url");
     await this.prisma.session.create({ data: { idHash: digest(session), csrfHash: digest(csrf), userId: user.id, expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1_000) } });
-    const permissions = [...new Set(user.roles.flatMap(({ role }) => role.permissions))] as Permission[];
-    return { principal: { id: user.id, email: user.email, displayName: user.displayName, permissions, authentication: "session" }, session, csrf };
+    return { principal: this.principal(user, "session"), session, csrf };
   }
 
   async logout(session: string | undefined): Promise<void> {
@@ -45,7 +75,11 @@ export class AuthService {
 
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(@Inject(Reflector) private readonly reflector: Reflector, @Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(Reflector) private readonly reflector: Reflector,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(AuthService) private readonly auth: AuthService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     if (this.reflector.getAllAndOverride<boolean>("public", [context.getHandler(), context.getClass()])) return true;
@@ -68,17 +102,13 @@ export class AuthGuard implements CanActivate {
     const session = await this.prisma.session.findUnique({ where: { idHash: digest(raw) }, include: { user: { include: { roles: { include: { role: true } } } } } });
     if (!session || session.expiresAt <= new Date() || session.user.disabledAt) return undefined;
     request.sessionCsrfHash = session.csrfHash;
-    return {
-      id: session.user.id, email: session.user.email, displayName: session.user.displayName,
-      permissions: [...new Set(session.user.roles.flatMap(({ role }) => role.permissions))] as Permission[], authentication: "session",
-    };
+    return this.auth.principal(session.user, "session");
   }
 
   private async fromToken(raw: string): Promise<Principal | undefined> {
     const token = await this.prisma.apiToken.findUnique({ where: { tokenHash: digest(raw) }, include: { user: { include: { roles: { include: { role: true } } } } } });
     if (!token || token.revokedAt || token.user.disabledAt || (token.expiresAt && token.expiresAt <= new Date())) return undefined;
-    const granted = new Set(token.user.roles.flatMap(({ role }) => role.permissions));
-    return { id: token.user.id, email: token.user.email, displayName: token.user.displayName, permissions: token.scopes.filter((scope) => granted.has(scope)) as Permission[], authentication: "token" };
+    return this.auth.principal(token.user, "token", token.scopes);
   }
 
   private assertCsrf(request: AuthenticatedRequest, principal: Principal): void {

@@ -27,7 +27,7 @@ services:
     restart: unless-stopped
 
   app:
-    image: netsentinel:0.1.0
+    image: ${NETSENTINEL_IMAGE:-ghcr.nju.edu.cn/bakacookie520/netsentinel:latest}
     build:
       context: .
       dockerfile: Dockerfile
@@ -40,12 +40,15 @@ services:
       REDIS_HOST: redis
       NETSENTINEL_MASTER_KEY: ${NETSENTINEL_MASTER_KEY}
       INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL}
-      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
       WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:8080}
       COOKIE_SECURE: "false"
       PORT: 3000
+      NETSENTINEL_DATA_DIR: /app/data
     ports:
       - "${NETSENTINEL_HTTP_PORT:-8080}:3000"
+    volumes:
+      - app-data:/app/data
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -71,3 +74,4 @@ services:
 volumes:
   postgres-data:
   redis-data:
+  app-data:
