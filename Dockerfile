@@ -26,10 +26,10 @@ RUN corepack enable \
 
 ENV NODE_ENV=production
 
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
-COPY --from=build /app/packages ./packages
-COPY --from=build /app/apps ./apps
+COPY --from=build --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
+COPY --from=build --chown=node:node /app/packages ./packages
+COPY --from=build --chown=node:node /app/apps ./apps
 
 USER node
 EXPOSE 3000
