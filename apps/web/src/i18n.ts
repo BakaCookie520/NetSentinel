@@ -160,7 +160,7 @@ const en = {
 
 void i18n.use(initReactI18next).init({ resources: { "zh-CN": { translation: zh }, "en-US": { translation: en } }, lng: localStorage.getItem("netsentinel.locale") ?? "zh-CN", fallbackLng: "zh-CN", interpolation: { escapeValue: false } });
 
-i18n.addResources("zh-CN", "translation", {
+i18n.addResourceBundle("zh-CN", "translation", {
   shell: {
     appearance: "外观",
     appearanceOptions: { light: "浅色模式", dark: "深色模式", system: "跟随系统" },
@@ -182,8 +182,8 @@ i18n.addResources("zh-CN", "translation", {
     saveError: "资料保存失败，请稍后重试。",
     saving: "保存中…",
   },
-});
-i18n.addResources("en-US", "translation", {
+}, true, true);
+i18n.addResourceBundle("en-US", "translation", {
   shell: {
     appearance: "Appearance",
     appearanceOptions: { light: "Light mode", dark: "Dark mode", system: "Use system setting" },
@@ -205,5 +205,5 @@ i18n.addResources("en-US", "translation", {
     saveError: "Could not save your profile. Try again later.",
     saving: "Saving…",
   },
-});
+}, true, true);
 export default i18n;
