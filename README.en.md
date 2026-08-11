@@ -61,19 +61,17 @@ docker compose down
 
 ## GHCR Images
 
-Every push to `main` publishes these images after the complete CI suite succeeds:
+Every push to `main` publishes this unified web and API image after the complete CI suite succeeds:
 
 ```text
-ghcr.io/bakacookie520/netsentinel-server:latest
-ghcr.io/bakacookie520/netsentinel-web:latest
+ghcr.io/bakacookie520/netsentinel:latest
 ```
 
 Each release also receives a `sha-<commit>` tag for pinned deployments and rollbacks. Private images require a token with `read:packages` permission:
 
 ```bash
 echo "$GHCR_TOKEN" | docker login ghcr.io -u BakaCookie520 --password-stdin
-docker pull ghcr.io/bakacookie520/netsentinel-server:latest
-docker pull ghcr.io/bakacookie520/netsentinel-web:latest
+docker pull ghcr.io/bakacookie520/netsentinel:latest
 ```
 
 ## Local Frontend Development

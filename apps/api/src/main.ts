@@ -9,6 +9,7 @@ import { AppModule } from "./app.module.js";
 import { attachAgentHub } from "./agent-hub.js";
 import { PrismaService } from "./prisma.service.js";
 import { ProblemDetailsFilter } from "./problem.filter.js";
+import { serveWebConsole } from "./web-console.js";
 
 function validateEnvironment(): void {
   const encoded = process.env.NETSENTINEL_MASTER_KEY;
@@ -24,11 +25,12 @@ async function bootstrap(): Promise<void> {
   app.use("/api/v1/auth/login", rateLimit({ windowMs: 15 * 60_000, limit: 10, standardHeaders: "draft-8", legacyHeaders: false }));
   app.use("/api/v1/public/status", rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: "draft-8", legacyHeaders: false }));
   app.useGlobalFilters(new ProblemDetailsFilter());
-  app.enableCors({ origin: process.env.WEB_ORIGIN ?? "http://localhost:5173", credentials: true, allowedHeaders: ["content-type", "authorization", "x-csrf-token", "if-match"] });
+  app.enableCors({ origin: process.env.WEB_ORIGIN ?? "http://localhost:8080", credentials: true, allowedHeaders: ["content-type", "authorization", "x-csrf-token", "if-match"] });
   app.setGlobalPrefix("api/v1");
   const document = SwaggerModule.createDocument(app, new DocumentBuilder().setTitle("NetSentinel API").setVersion("1.0").addCookieAuth("netsentinel_session").addBearerAuth().build());
   SwaggerModule.setup("api/docs", app, document);
   const closeAgentHub = attachAgentHub(app.getHttpServer(), app.get(PrismaService));
+  serveWebConsole(app.getHttpAdapter().getInstance());
   app.enableShutdownHooks();
   process.once("SIGTERM", () => void closeAgentHub());
   await app.listen(Number(process.env.PORT ?? 3000), "0.0.0.0");

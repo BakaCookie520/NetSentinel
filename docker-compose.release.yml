@@ -1,8 +1,0 @@
-services:
-  api:
-    build:
-      dockerfile: Dockerfile.release.server
-
-  web:
-    build:
-      dockerfile: Dockerfile.release.web

@@ -61,19 +61,17 @@ docker compose down
 
 ## GHCR 镜像
 
-每次推送到 `main` 且 CI 全部通过后，GitHub Actions 会自动发布以下镜像：
+每次推送到 `main` 且 CI 全部通过后，GitHub Actions 会自动发布以下统一 Web 与 API 镜像：
 
 ```text
-ghcr.io/bakacookie520/netsentinel-server:latest
-ghcr.io/bakacookie520/netsentinel-web:latest
+ghcr.io/bakacookie520/netsentinel:latest
 ```
 
 每次发布还会生成 `sha-<提交号>` 标签，用于固定版本和回滚。私有镜像需要先使用具有 `read:packages` 权限的令牌登录：
 
 ```bash
 echo "$GHCR_TOKEN" | docker login ghcr.io -u BakaCookie520 --password-stdin
-docker pull ghcr.io/bakacookie520/netsentinel-server:latest
-docker pull ghcr.io/bakacookie520/netsentinel-web:latest
+docker pull ghcr.io/bakacookie520/netsentinel:latest
 ```
 
 ## 本地前端开发

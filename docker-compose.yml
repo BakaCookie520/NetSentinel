@@ -26,11 +26,13 @@ services:
       retries: 20
     restart: unless-stopped
 
-  api:
-    image: netsentinel-server:0.1.0
+  app:
+    image: netsentinel:0.1.0
     build:
       context: .
-      dockerfile: Dockerfile.server
+      dockerfile: Dockerfile
+      args:
+        VITE_DEMO_MODE: "false"
     command: ["sh", "-c", "pnpm --filter @netsentinel/database prisma:migrate && node apps/api/dist/bootstrap-admin.js && node apps/api/dist/main.js"]
     environment:
       DATABASE_URL: postgresql://netsentinel:${POSTGRES_PASSWORD}@postgres:5432/netsentinel
@@ -42,6 +44,8 @@ services:
       WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:8080}
       COOKIE_SECURE: "false"
       PORT: 3000
+    ports:
+      - "${NETSENTINEL_HTTP_PORT:-8080}:3000"
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -53,7 +57,7 @@ services:
     restart: unless-stopped
 
   worker:
-    image: netsentinel-server:0.1.0
+    image: netsentinel:0.1.0
     command: ["node", "apps/worker/dist/main.js"]
     environment:
       DATABASE_URL: postgresql://netsentinel:${POSTGRES_PASSWORD}@postgres:5432/netsentinel
@@ -61,19 +65,7 @@ services:
       NETSENTINEL_MASTER_KEY: ${NETSENTINEL_MASTER_KEY}
     cap_add: ["NET_RAW"]
     depends_on:
-      api: { condition: service_healthy }
-    restart: unless-stopped
-
-  web:
-    image: netsentinel-web:0.1.0
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
-      args: { VITE_DEMO_MODE: "false" }
-    ports:
-      - "${NETSENTINEL_HTTP_PORT:-8080}:80"
-    depends_on:
-      api: { condition: service_healthy }
+      app: { condition: service_healthy }
     restart: unless-stopped
 
 volumes:

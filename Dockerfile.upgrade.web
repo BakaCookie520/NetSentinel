@@ -1,4 +1,0 @@
-ARG BASE_IMAGE=netsentinel-web:0.1.0
-FROM ${BASE_IMAGE}
-
-COPY apps/web/dist /usr/share/nginx/html

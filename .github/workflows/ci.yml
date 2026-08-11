@@ -91,6 +91,8 @@ jobs:
             apps/web/playwright-report
           if-no-files-found: ignore
           retention-days: 7
+      - name: Build unified application image
+        run: docker build --build-arg VITE_DEMO_MODE=false --tag netsentinel:ci .
 
   publish:
     needs: verify
@@ -99,16 +101,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: server
-            image: ghcr.io/bakacookie520/netsentinel-server
-            dockerfile: Dockerfile.server
-          - name: web
-            image: ghcr.io/bakacookie520/netsentinel-web
-            dockerfile: apps/web/Dockerfile
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v4
@@ -122,20 +114,22 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ matrix.image }}
+          images: ghcr.io/bakacookie520/netsentinel
           tags: |
             type=raw,value=latest
             type=sha,prefix=sha-,format=short
           labels: |
-            org.opencontainers.image.title=NetSentinel ${{ matrix.name }}
-            org.opencontainers.image.description=NetSentinel ${{ matrix.name }} container image
-      - name: Build and push ${{ matrix.name }} image
+            org.opencontainers.image.title=NetSentinel
+            org.opencontainers.image.description=NetSentinel unified web and API container image
+      - name: Build and push unified application image
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: ${{ matrix.dockerfile }}
+          file: Dockerfile
+          build-args: |
+            VITE_DEMO_MODE=false
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          cache-from: type=gha,scope=netsentinel
+          cache-to: type=gha,mode=max,scope=netsentinel
