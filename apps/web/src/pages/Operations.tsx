@@ -151,6 +151,7 @@ function Section({
 export function DashboardPage() {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
+  const compactChart = useMediaQuery(theme.breakpoints.down("sm"));
   const client = useQueryClient();
   const { runCommand } = useActionFeedback();
   const [refreshing, setRefreshing] = useState(false);
@@ -282,9 +283,16 @@ export function DashboardPage() {
             }
           >
             {latencyTrend.length > 0 ? (
-            <Box data-testid="dashboard-latency-chart" sx={{ height: 270, p: 1 }}>
+            <Box
+              data-testid="dashboard-latency-chart"
+              sx={{
+                height: { xs: 294, sm: 270 },
+                p: { xs: 0.5, sm: 1 },
+                overflow: "hidden",
+              }}
+            >
               <LineChart
-                height={255}
+                height={compactChart ? 282 : 255}
                 xAxis={[
                   {
                     scaleType: "point",
@@ -302,7 +310,11 @@ export function DashboardPage() {
                   },
                 ]}
                 grid={{ horizontal: true }}
-                margin={{ left: 45, right: 15, top: 25, bottom: 25 }}
+                margin={
+                  compactChart
+                    ? { left: 38, right: 10, top: 44, bottom: 30 }
+                    : { left: 45, right: 15, top: 25, bottom: 25 }
+                }
               />
             </Box>
             ) : (
