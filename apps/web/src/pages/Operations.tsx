@@ -846,22 +846,73 @@ export function MonitorsPage() {
               ),
             }}
           />
-          <ToggleButtonGroup
-            exclusive
-            size="small"
-            value={status}
-            onChange={(_event, value) => value && setStatus(value)}
-          >
-            {["ALL", "UP", "DEGRADED", "DOWN", "PAUSED"].map((item) => (
-              <ToggleButton key={item} value={item}>
-                {item === "ALL" ? "全部" : item}
-              </ToggleButton>
-            ))}
-          </ToggleButtonGroup>
+          <Box sx={{ minWidth: 0, overflowX: "auto", pb: { xs: 0.25, md: 0 } }}>
+            <ToggleButtonGroup
+              exclusive
+              size="small"
+              value={status}
+              onChange={(_event, value) => value && setStatus(value)}
+              sx={{ minWidth: "max-content" }}
+            >
+              {["ALL", "UP", "DEGRADED", "DOWN", "PAUSED"].map((item) => (
+                <ToggleButton key={item} value={item}>
+                  {item === "ALL" ? "全部" : item}
+                </ToggleButton>
+              ))}
+            </ToggleButtonGroup>
+          </Box>
           <Box flex={1} />
         </Stack>
         {query.isLoading && <LinearProgress />}
-        <TableContainer>
+        <Box className="mobile-record-list">
+          {rows.map((monitor) => (
+            <Card
+              key={monitor.id}
+              variant="outlined"
+              className="mobile-record-card"
+              onClick={() => setSelected(monitor)}
+            >
+              <CardContent sx={{ p: "16px!important" }}>
+                <Stack gap={1.25}>
+                  <Stack direction="row" alignItems="flex-start" justifyContent="space-between" gap={1}>
+                    <Box minWidth={0}>
+                      <Typography fontWeight={800} noWrap>{monitor.name}</Typography>
+                      <Typography variant="caption" color="text.secondary" className="mobile-record-card__target">
+                        {monitor.target}
+                      </Typography>
+                    </Box>
+                    <StatusChip status={monitor.status} />
+                  </Stack>
+                  <Stack direction="row" flexWrap="wrap" gap={0.75} alignItems="center">
+                    <Chip size="small" variant="outlined" label={monitor.type} />
+                    <Typography variant="body2" color="text.secondary">
+                      {monitor.latencyMs ? `${monitor.latencyMs} ms` : "—"}
+                    </Typography>
+                    {monitor.tags.slice(0, 3).map((tag) => (
+                      <Chip key={tag} size="small" label={tag} variant="outlined" />
+                    ))}
+                  </Stack>
+                  <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
+                    <Typography variant="caption" color="text.secondary">
+                      上次检查：<RelativeTime value={monitor.lastCheckedAt} />
+                    </Typography>
+                    <IconButton
+                      size="small"
+                      aria-label="打开监控详情"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setSelected(monitor);
+                      }}
+                    >
+                      <MoreHorizOutlined />
+                    </IconButton>
+                  </Stack>
+                </Stack>
+              </CardContent>
+            </Card>
+          ))}
+        </Box>
+        <TableContainer className="desktop-record-table">
           <Table size="small">
             <TableHead>
               <TableRow>

@@ -3,6 +3,8 @@ import {
   Alert,
   Box,
   Button,
+  Card,
+  CardContent,
   Checkbox,
   Chip,
   CircularProgress,
@@ -104,7 +106,78 @@ export function WorkflowsPage() {
         }
       />
       <Paper variant="outlined">
-        <TableContainer>
+        <Box className="mobile-record-list">
+          {(query.data ?? []).map((workflow) => (
+            <Card key={workflow.id} variant="outlined" className="mobile-record-card">
+              <CardContent sx={{ p: "16px!important" }}>
+                <Stack gap={1.25}>
+                  <Stack direction="row" alignItems="flex-start" justifyContent="space-between" gap={1}>
+                    <Box minWidth={0}>
+                      <Typography fontWeight={800} className="mobile-record-card__title">
+                        {workflow.name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {workflow.monitor?.name ?? "未绑定监控"}
+                      </Typography>
+                    </Box>
+                    {workflow.configurationComplete ? (
+                      <Chip size="small" color="success" variant="outlined" label="配置完整" />
+                    ) : (
+                      <Chip size="small" color="error" label="配置不完整" />
+                    )}
+                  </Stack>
+                  <Box className="mobile-record-card__grid">
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">触发</Typography>
+                      <Typography variant="body2" fontWeight={700}>{workflow.trigger}</Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">授权</Typography>
+                      <Typography variant="body2" fontWeight={700}>
+                        {workflow.approvalMode === "AUTO" ? "自动执行" : `审批 ${workflow.approvalTimeoutMinutes} 分钟`}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">步骤</Typography>
+                      <Typography variant="body2" fontWeight={700}>{workflow.steps.length}</Typography>
+                    </Box>
+                  </Box>
+                  <Stack direction="row" justifyContent="flex-end" gap={0.25}>
+                    <Tooltip title="手动执行">
+                      <span>
+                        <IconButton
+                          disabled={!workflow.configurationComplete || (execute.isPending && execute.variables === workflow.id)}
+                          aria-label={`执行工作流 ${workflow.name}`}
+                          onClick={() => execute.mutate(workflow.id)}
+                        >
+                          {execute.isPending && execute.variables === workflow.id ? <CircularProgress size={18} /> : <PlayArrowOutlined />}
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                    <Tooltip title="编辑">
+                      <IconButton aria-label={`编辑工作流 ${workflow.name}`} onClick={() => setEditing(workflow)}>
+                        <EditOutlined />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="删除">
+                      <IconButton
+                        color="error"
+                        aria-label={`删除工作流 ${workflow.name}`}
+                        disabled={remove.isPending && remove.variables === workflow.id}
+                        onClick={() => {
+                          if (window.confirm(`确定删除工作流“${workflow.name}”吗？`)) remove.mutate(workflow.id);
+                        }}
+                      >
+                        {remove.isPending && remove.variables === workflow.id ? <CircularProgress size={18} /> : <DeleteOutline />}
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
+                </Stack>
+              </CardContent>
+            </Card>
+          ))}
+        </Box>
+        <TableContainer className="desktop-record-table">
           <Table>
             <TableHead>
               <TableRow>

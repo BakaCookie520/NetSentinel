@@ -162,6 +162,36 @@ button, a, input, textarea, [role="button"] {
   transform-origin: top right;
 }
 
+.mobile-record-list {
+  display: none;
+}
+
+.mobile-record-card {
+  cursor: pointer;
+}
+
+.mobile-record-card__target {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-record-card__title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-record-card__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+}
+
 @keyframes surface-enter {
   from { opacity: 0; transform: translateY(-6px) scale(.985); }
   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -205,6 +235,22 @@ button, a, input, textarea, [role="button"] {
 @media (max-width: 520px) {
   .metric-grid { grid-template-columns: 1fr; }
   .page-header { padding-top: 0; }
+}
+
+@media (max-width: 767px) {
+  .mobile-record-list {
+    display: grid;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .desktop-record-table {
+    display: none;
+  }
+
+  .mobile-record-card__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

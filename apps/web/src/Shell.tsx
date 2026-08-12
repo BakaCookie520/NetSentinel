@@ -223,7 +223,15 @@ export function Shell({
   };
 
   const drawer = (
-    <Box className="shell-rail" sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+    <Box
+      className="shell-rail"
+      sx={{
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
+    >
       <Stack direction="row" alignItems="center" gap={1.25} sx={{ height: 72, px: 2.25 }}>
         <Box className="brand-mark" sx={{ bgcolor: "primary.main", color: "primary.contrastText" }}>
           <ShieldOutlined fontSize="small" />
@@ -236,7 +244,18 @@ export function Shell({
         </Box>
       </Stack>
       <Divider />
-      <List dense sx={{ px: 1.25, py: 1.5, flex: 1 }}>
+      <List
+        dense
+        sx={{
+          px: 1.25,
+          py: 1.5,
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          overscrollBehavior: "contain",
+          scrollbarGutter: "stable",
+        }}
+      >
         {navSections.map((section) => (
           <Box key={section.label} sx={{ mb: 1 }}>
             <ListSubheader disableSticky disableGutters sx={{ px: 1 }}>
@@ -278,6 +297,8 @@ export function Shell({
         className="system-pulse"
         sx={{
           m: 1.75,
+          mt: 0.5,
+          flexShrink: 0,
           p: 1.5,
           pl: 1.75,
           border: 1,
