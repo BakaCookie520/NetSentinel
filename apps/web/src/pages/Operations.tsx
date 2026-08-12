@@ -312,7 +312,7 @@ export function DashboardPage() {
                 grid={{ horizontal: true }}
                 margin={
                   compactChart
-                    ? { left: 38, right: 10, top: 44, bottom: 30 }
+                    ? { left: 38, right: 118, top: 44, bottom: 30 }
                     : { left: 45, right: 15, top: 25, bottom: 25 }
                 }
               />
