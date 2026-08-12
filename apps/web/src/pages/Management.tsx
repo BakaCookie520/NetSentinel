@@ -30,7 +30,9 @@ import {
   TextField,
   Tooltip,
   Typography,
+  useMediaQuery,
 } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 import {
   AddOutlined,
   CheckCircleOutline,
@@ -77,6 +79,7 @@ import {
 
 export function WorkflowsPage() {
   const client = useQueryClient();
+  const compact = useMediaQuery(useTheme().breakpoints.down("sm"));
   const query = useQuery({ queryKey: ["workflows"], queryFn: api.workflows });
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Workflow | null>(null);
@@ -106,7 +109,7 @@ export function WorkflowsPage() {
         }
       />
       <Paper variant="outlined">
-        <Box className="mobile-record-list">
+        {compact && <Box className="mobile-record-list">
           {(query.data ?? []).map((workflow) => (
             <Card key={workflow.id} variant="outlined" className="mobile-record-card">
               <CardContent sx={{ p: "16px!important" }}>
@@ -176,8 +179,8 @@ export function WorkflowsPage() {
               </CardContent>
             </Card>
           ))}
-        </Box>
-        <TableContainer className="desktop-record-table">
+        </Box>}
+        {!compact && <TableContainer className="desktop-record-table">
           <Table>
             <TableHead>
               <TableRow>
@@ -282,7 +285,7 @@ export function WorkflowsPage() {
               ))}
             </TableBody>
           </Table>
-        </TableContainer>
+        </TableContainer>}
       </Paper>
       <WorkflowEditorDialog
         open={open || Boolean(editing)}

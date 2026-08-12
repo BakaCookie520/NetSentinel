@@ -794,6 +794,7 @@ function ConnectedMonitorDetails({
 
 export function MonitorsPage() {
   const { t } = useTranslation();
+  const compact = useMediaQuery(useTheme().breakpoints.down("sm"));
   const [dialog, setDialog] = useState(false);
   const [editing, setEditing] = useState<Monitor | null>(null);
   const [search, setSearch] = useState("");
@@ -864,7 +865,7 @@ export function MonitorsPage() {
           <Box flex={1} />
         </Stack>
         {query.isLoading && <LinearProgress />}
-        <Box className="mobile-record-list">
+        {compact && <Box className="mobile-record-list">
           {rows.map((monitor) => (
             <Card
               key={monitor.id}
@@ -911,8 +912,8 @@ export function MonitorsPage() {
               </CardContent>
             </Card>
           ))}
-        </Box>
-        <TableContainer className="desktop-record-table">
+        </Box>}
+        {!compact && <TableContainer className="desktop-record-table">
           <Table size="small">
             <TableHead>
               <TableRow>
@@ -984,7 +985,7 @@ export function MonitorsPage() {
               ))}
             </TableBody>
           </Table>
-        </TableContainer>
+        </TableContainer>}
       </Paper>
       <MonitorEditorDialog
         open={dialog || Boolean(editing)}
