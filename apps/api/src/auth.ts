@@ -1,10 +1,12 @@
-import { CanActivate, ExecutionContext, Inject, Injectable, SetMetadata, UnauthorizedException, ForbiddenException } from "@nestjs/common";
+import { CanActivate, ExecutionContext, Inject, Injectable, Optional, SetMetadata, ServiceUnavailableException, UnauthorizedException, ForbiddenException } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import { hash, verify, Algorithm } from "@node-rs/argon2";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type { Request } from "express";
 import type { Permission } from "@netsentinel/contracts";
 import { PrismaService } from "./prisma.service.js";
+import { BackupRuntime } from "./backup-runtime.js";
+import { RESTORE_GATE } from "./backup-types.js";
 
 export const Public = () => SetMetadata("public", true);
 export const RequirePermissions = (...permissions: Permission[]) => SetMetadata("permissions", permissions);
@@ -79,9 +81,14 @@ export class AuthGuard implements CanActivate {
     @Inject(Reflector) private readonly reflector: Reflector,
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(AuthService) private readonly auth: AuthService,
+    @Optional() @Inject(BackupRuntime) private readonly backups?: BackupRuntime,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const incoming = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    if (this.backups && !/^\/api\/v1\/(?:admin\/backups(?:\/|$)|health\/)/u.test(incoming.originalUrl) && await this.backups.redis.exists(RESTORE_GATE)) {
+      throw new ServiceUnavailableException("RESTORE_IN_PROGRESS");
+    }
     if (this.reflector.getAllAndOverride<boolean>("public", [context.getHandler(), context.getClass()])) return true;
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const authorization = request.headers.authorization;
@@ -89,6 +96,7 @@ export class AuthGuard implements CanActivate {
     if (authorization?.startsWith("Bearer nst_")) principal = await this.fromToken(authorization.slice(7));
     else principal = await this.fromSession(request);
     if (!principal) throw new UnauthorizedException();
+    if (/^\/api\/v1\/admin\/backups(?:\/|$)/u.test(request.originalUrl ?? "") && principal.authentication !== "session") throw new ForbiddenException("BACKUP_SESSION_REQUIRED");
     request.principal = principal;
     this.assertCsrf(request, principal);
     const required = this.reflector.getAllAndOverride<Permission[]>("permissions", [context.getHandler(), context.getClass()]) ?? [];

@@ -65,8 +65,20 @@ jobs:
         run: |
           pnpm --filter @netsentinel/database prisma:migrate
           node apps/api/dist/bootstrap-admin.js
+      - name: Verify isolated backup restoration
+        env:
+          PGPASSWORD: integration-postgres-password
+        run: |
+          createdb --host 127.0.0.1 --username netsentinel netsentinel_backup_test
+          docker run -d --name netsentinel-backup-redis -p 16379:6379 redis:7-alpine
+          export DATABASE_URL=postgresql://netsentinel:integration-postgres-password@127.0.0.1:5432/netsentinel_backup_test
+          export REDIS_PORT=16379
+          export NETSENTINEL_BACKUP_INTEGRATION=true
+          pnpm --filter @netsentinel/database prisma:migrate
+          pnpm --filter @netsentinel/api exec vitest run src/backup.integration.test.ts
       - name: Start E2E API
         run: |
+          export NETSENTINEL_DATA_DIR="$RUNNER_TEMP/netsentinel-data"
           nohup node apps/api/dist/main.js > "$RUNNER_TEMP/netsentinel-api.log" 2>&1 &
           api_pid=$!
           for attempt in {1..30}; do

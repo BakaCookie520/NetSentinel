@@ -15,6 +15,7 @@ import { LockOutlined, MailOutline, ShieldOutlined } from "@mui/icons-material";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
+import i18n from "./i18n";
 import {
   buildTheme,
   getStoredThemeColor,
@@ -31,6 +32,7 @@ import {
 import { DashboardPage, IncidentsPage, MonitorsPage } from "./pages/Operations";
 import { LogsPage } from "./pages/Logs";
 import { PublicStatusPage } from "./pages/PublicStatus";
+import { BackupsPage } from "./pages/Backups";
 import {
   AccessPage,
   AgentsPage,
@@ -71,6 +73,7 @@ function LoginPage({ onLogin }: { onLogin: () => void }) {
   const [email, setEmail] = useState("admin@netsentinel.local");
   const [password, setPassword] = useState(api.isDemo ? "NetSentinel123!" : "");
   const [error, setError] = useState("");
+  const [restored] = useState(() => sessionStorage.getItem("netsentinel.restored") === "true");
   const [busy, setBusy] = useState(false);
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -78,6 +81,7 @@ function LoginPage({ onLogin }: { onLogin: () => void }) {
     setError("");
     try {
       const result = await api.login(email, password);
+      sessionStorage.removeItem("netsentinel.restored");
       sessionStorage.setItem("netsentinel.user", JSON.stringify(result.user));
       window.dispatchEvent(new CustomEvent("netsentinel:user", { detail: result.user }));
       onLogin();
@@ -199,6 +203,7 @@ function LoginPage({ onLogin }: { onLogin: () => void }) {
           <Typography color="text.secondary" sx={{ mt: 1, mb: 3 }}>
             使用本地管理员账户访问监控与自动化。
           </Typography>
+          {restored && <Alert severity="success" sx={{ mb: 2 }}>{i18n.t("backup.relogin")}</Alert>}
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {error}
@@ -362,6 +367,7 @@ export function App() {
             <Route path="logs" element={<LogsPage />} />
             <Route path="audit" element={<AuditPage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="backups" element={<BackupsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

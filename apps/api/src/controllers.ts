@@ -12,6 +12,8 @@ import { AuthService, Public, RequirePermissions, type AuthenticatedRequest, dig
 import { PrismaService } from "./prisma.service.js";
 import { EventStreamService, QueueService, metrics } from "./services.js";
 import { readAvatar, removeAvatar, saveAvatar } from "./avatar-storage.js";
+import { BackupRuntime } from "./backup-runtime.js";
+import { RESTORE_GATE } from "./backup-types.js";
 
 const parse = <T>(schema: z.ZodType<T>, value: unknown): T => {
   const result = schema.safeParse(value);
@@ -178,11 +180,11 @@ export class AuthController {
 
 @Controller()
 export class SystemController {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService, @Inject(EventStreamService) private readonly stream: EventStreamService, @Inject(QueueService) private readonly queues: QueueService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService, @Inject(EventStreamService) private readonly stream: EventStreamService, @Inject(QueueService) private readonly queues: QueueService, @Inject(BackupRuntime) private readonly backupRuntime: BackupRuntime) {}
   @Public() @Get("health/live") live() { return { status: "ok" }; }
   @Public() @Get("health/ready") async ready() {
     const [, workers] = await Promise.all([this.prisma.$queryRaw`SELECT 1`, this.queues.probe.getWorkers()]);
-    return { status: "ready", workerConnected: workers.length > 0 };
+    return { status: "ready", workerConnected: workers.length > 0, restoring: Boolean(await this.backupRuntime.redis.exists(RESTORE_GATE)) };
   }
   @Public() @Get("metrics") @Header("content-type", "text/plain; version=0.0.4") getMetrics() { return metrics(); }
   @Sse("events") events(): Observable<MessageEvent> { return this.stream.events.pipe(map((event) => ({ type: event.type, data: event.data as object }))); }

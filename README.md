@@ -142,3 +142,9 @@ pnpm build
 ```
 
 CI 还会使用真实 PostgreSQL、Redis、API 和 Playwright 执行浏览器流程测试。
+
+## 备份与恢复
+
+管理导航中的「备份与恢复」支持独立口令加密、手动/定时完整站点备份、导入导出和
+覆盖恢复。备份与头像保存在现有 `app-data` 卷中。使用方法和恢复注意事项见
+[备份说明](docs/backups.md)。上线时需同时更新 app 与 worker，并运行数据库迁移。

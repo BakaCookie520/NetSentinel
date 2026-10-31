@@ -6,6 +6,7 @@ import { Agent, fetch } from "undici";
 import { Redis } from "ioredis";
 import { lookup } from "node:dns/promises";
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { Prisma, PrismaClient, ApprovalMode, ApprovalStatus, CredentialType, IncidentStatus, MonitorType, RunStatus, StepType, TriggerType } from "@netsentinel/database";
 import { monitorInputSchema, workflowStepInputSchema } from "@netsentinel/contracts";
 import { advanceMonitorState, decryptSecret, isAddressAllowed, renderCommandTemplate, runHttpProbe, runIcmpProbe, runTcpProbe, runWebSocketProbe, type ProbeResult, type SecretEnvelope } from "@netsentinel/core";
@@ -18,6 +19,20 @@ const connection = { host: process.env.REDIS_HOST ?? "127.0.0.1", port: Number(p
 const prisma = new PrismaClient();
 const redis = new Redis(connection);
 const publisher = new Redis(connection);
+const restoreGateKey = "netsentinel:restore:gate";
+const restoreWorkerKey = `netsentinel:worker:restore-aware:${randomUUID()}`;
+let backgroundOperations = 0;
+async function restoreAware(action: () => Promise<void>): Promise<void> {
+  backgroundOperations += 1;
+  try {
+    await redis.set(restoreWorkerKey, "busy", "EX", 15);
+    if (await redis.exists(restoreGateKey)) return;
+    await action();
+  } finally {
+    backgroundOperations -= 1;
+    await redis.set(restoreWorkerKey, backgroundOperations ? "busy" : "idle", "EX", 15);
+  }
+}
 const probeQueue = new Queue("probe", { connection });
 const workflowQueue = new Queue("workflow", { connection });
 const masterKey = process.env.NETSENTINEL_MASTER_KEY ? Buffer.from(process.env.NETSENTINEL_MASTER_KEY, "base64") : Buffer.alloc(0);
@@ -369,12 +384,15 @@ async function cleanupRetention(): Promise<void> {
 
 const probeWorker = new Worker("probe", handleProbe, { connection, concurrency: 20, lockDuration: 300_000 });
 const workflowWorker = new Worker("workflow", handleWorkflow, { connection, concurrency: 5, lockDuration: 600_000 });
-const scheduleTimer = setInterval(() => void scheduleDueMonitors(), 5_000);
-const cleanupTimer = setInterval(() => void cleanupRetention(), 24 * 60 * 60 * 1_000);
-void scheduleDueMonitors(); void cleanupRetention();
+const scheduleTimer = setInterval(() => void restoreAware(scheduleDueMonitors).catch(() => undefined), 5_000);
+const cleanupTimer = setInterval(() => void restoreAware(cleanupRetention).catch(() => undefined), 24 * 60 * 60 * 1_000);
+const restoreHeartbeat = setInterval(() => void redis.set(restoreWorkerKey, backgroundOperations ? "busy" : "idle", "EX", 15).catch(() => undefined), 3000);
+void restoreAware(scheduleDueMonitors); void restoreAware(cleanupRetention);
 
 async function shutdown(): Promise<void> {
   clearInterval(scheduleTimer); clearInterval(cleanupTimer);
+  clearInterval(restoreHeartbeat);
+  await redis.del(restoreWorkerKey);
   await Promise.all([probeWorker.close(), workflowWorker.close(), probeQueue.close(), workflowQueue.close(), redis.quit(), publisher.quit(), prisma.$disconnect()]);
 }
 process.on("SIGTERM", () => void shutdown().then(() => process.exit(0)));

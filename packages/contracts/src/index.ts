@@ -114,7 +114,7 @@ export const PERMISSIONS = [
   "monitor:read", "monitor:write", "workflow:read", "workflow:write",
   "workflow:execute", "workflow:approve", "credential:manage",
   "incident:read", "incident:manage", "agent:read", "agent:manage",
-  "user:manage", "role:manage", "token:manage", "audit:read", "settings:manage"
+  "user:manage", "role:manage", "token:manage", "audit:read", "settings:manage", "backup:manage"
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 

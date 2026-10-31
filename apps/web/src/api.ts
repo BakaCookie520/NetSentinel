@@ -239,7 +239,7 @@ const demoMonitors: Monitor[] = [];
 const demoWorkflows: Workflow[] = [];
 const demoCredentials: Credential[] = [];
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/v1${path}`, {
     credentials: "include",
     ...init,
@@ -279,7 +279,7 @@ const json = (method: string, body?: unknown): RequestInit => ({
   ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
 });
 
-async function requestMultipart<T>(path: string, body: FormData): Promise<T> {
+export async function requestMultipart<T>(path: string, body: FormData): Promise<T> {
   const response = await fetch(`/api/v1${path}`, {
     method: "POST",
     body,

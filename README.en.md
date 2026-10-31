@@ -142,3 +142,10 @@ pnpm build
 ```
 
 CI also runs browser flows against real PostgreSQL, Redis, and API services with Playwright.
+
+## Backups and recovery
+
+The administration navigation includes encrypted whole-site backups, daily/weekly
+schedules, import/export and protected full restoration. Archives and avatars use
+the existing `app-data` volume. See [backup documentation](docs/backups.md).
+Upgrade both app and worker and apply database migrations when releasing.

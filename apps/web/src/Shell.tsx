@@ -67,6 +67,7 @@ const nav = [
   ["/logs", "logs", ReceiptLongOutlined],
   ["/audit", "audit", HistoryOutlined],
   ["/settings", "settings", SettingsOutlined],
+  ["/backups", "backups", HistoryOutlined],
 ] as const;
 const navSections = [
   { label: "operations", items: nav.slice(0, 3) },
@@ -262,6 +263,7 @@ export function Shell({
               {t(`shell.${section.label}`)}
             </ListSubheader>
             {section.items.map(([path, key, Icon]) => {
+              if (path === "/backups" && !user.permissions.includes("backup:manage") && !user.permissions.includes("*")) return null;
               const selected = path === "/" ? location.pathname === "/" : location.pathname.startsWith(path);
               return (
                 <ListItemButton
