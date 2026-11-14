@@ -2,9 +2,11 @@ import ipaddr from "ipaddr.js";
 import type { MonitorState, Transition } from "@netsentinel/contracts";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
+import type { LookupOptions } from "node:dns";
+import type { ClientRequestArgs } from "node:http";
 import { createConnection } from "node:net";
 import { JSONPath } from "jsonpath-plus";
-import { Agent, fetch } from "undici";
+import { Agent, buildConnector, fetch } from "undici";
 import WebSocket from "ws";
 import { RE2 } from "re2-wasm";
 
@@ -163,7 +165,44 @@ export interface ProbeResult {
   errorMessage?: string;
 }
 
-export type TargetAuthorizer = (hostname: string) => Promise<boolean>;
+export interface AuthorizedTarget {
+  address: string;
+  family: 4 | 6;
+}
+
+export type TargetAuthorizer = (hostname: string) => Promise<AuthorizedTarget | null>;
+
+type PinnedLookup = NonNullable<ClientRequestArgs["lookup"]>;
+
+function pinnedLookup(target: AuthorizedTarget): PinnedLookup {
+  return ((
+    _hostname: string,
+    options: LookupOptions,
+    callback: (...args: unknown[]) => void,
+  ): void => {
+    const all = options.all === true;
+    if (all) callback(null, [{ address: target.address, family: target.family }]);
+    else callback(null, target.address, target.family);
+  }) as PinnedLookup;
+}
+
+export function createPinnedDispatcher(
+  target: AuthorizedTarget,
+  verifyTls: boolean,
+): Agent {
+  const connector = buildConnector({ rejectUnauthorized: verifyTls });
+  return new Agent({
+    connect: (options, callback) =>
+      connector(
+        {
+          ...options,
+          hostname: target.address,
+          servername: options.servername ?? options.hostname,
+        },
+        callback,
+      ),
+  });
+}
 
 async function readBody(response: Response, limit = 64 * 1024): Promise<string> {
   if (!response.body) return "";
@@ -191,14 +230,17 @@ function failed(startedAt: number, errorCode: string, errorMessage: string, stat
 
 export async function runHttpProbe(config: HttpProbeConfig, authorize: TargetAuthorizer): Promise<ProbeResult> {
   const startedAt = performance.now();
-  const dispatcher = new Agent({ connect: { rejectUnauthorized: config.verifyTls } });
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+  let dispatcher: Agent | undefined;
   try {
     let target = new URL(config.url);
     let response: Response | undefined;
     for (let redirects = 0; redirects <= 5; redirects += 1) {
-      if (!(await authorize(target.hostname))) return failed(startedAt, "TARGET_BLOCKED", "Target blocked by egress policy");
+      const authorized = await authorize(target.hostname);
+      if (!authorized) return failed(startedAt, "TARGET_BLOCKED", "Target blocked by egress policy");
+      await dispatcher?.close();
+      dispatcher = createPinnedDispatcher(authorized, config.verifyTls);
       const requestInit: Parameters<typeof fetch>[1] = {
         method: config.method,
         redirect: "manual",
@@ -244,7 +286,7 @@ export async function runHttpProbe(config: HttpProbeConfig, authorize: TargetAut
     return failed(startedAt, error instanceof Error && error.name === "AbortError" ? "TIMEOUT" : "NETWORK_ERROR", message);
   } finally {
     clearTimeout(timeout);
-    await dispatcher.close();
+    await dispatcher?.close();
   }
 }
 
@@ -252,10 +294,15 @@ export interface TcpProbeConfig { host: string; port: number; timeoutMs: number 
 
 export async function runTcpProbe(config: TcpProbeConfig, authorize: TargetAuthorizer): Promise<ProbeResult> {
   const startedAt = performance.now();
-  if (!(await authorize(config.host))) return failed(startedAt, "TARGET_BLOCKED", "Target blocked by egress policy");
+  const target = await authorize(config.host);
+  if (!target) return failed(startedAt, "TARGET_BLOCKED", "Target blocked by egress policy");
   return new Promise((resolve) => {
     let settled = false;
-    const socket = createConnection({ host: config.host, port: config.port });
+    const socket = createConnection({
+      host: target.address,
+      family: target.family,
+      port: config.port,
+    });
     const finish = (result: ProbeResult) => {
       if (settled) return;
       settled = true;
@@ -282,11 +329,17 @@ export interface WebSocketProbeConfig {
 export async function runWebSocketProbe(config: WebSocketProbeConfig, authorize: TargetAuthorizer): Promise<ProbeResult> {
   const startedAt = performance.now();
   const target = new URL(config.url);
-  if (!(await authorize(target.hostname))) return failed(startedAt, "TARGET_BLOCKED", "Target blocked by egress policy");
+  const authorized = await authorize(target.hostname);
+  if (!authorized) return failed(startedAt, "TARGET_BLOCKED", "Target blocked by egress policy");
   return new Promise((resolve) => {
     let settled = false;
     const expected = config.expect ?? (config.textContains === undefined ? "HANDSHAKE" : "MESSAGE");
-    const socket = new WebSocket(config.url, { rejectUnauthorized: config.verifyTls, followRedirects: false, headers: config.headers });
+    const socket = new WebSocket(config.url, {
+      rejectUnauthorized: config.verifyTls,
+      followRedirects: false,
+      headers: config.headers,
+      lookup: pinnedLookup(authorized),
+    });
     const timer = setTimeout(() => finish(failed(startedAt, "TIMEOUT", "WebSocket probe timed out")), config.timeoutMs);
     const finish = (result: ProbeResult) => {
       if (settled) return;
@@ -337,7 +390,8 @@ export async function runIcmpProbe(
   executePing: PingExecutor = defaultPingExecutor,
 ): Promise<ProbeResult> {
   const startedAt = performance.now();
-  if (!(await authorize(config.host))) return failed(startedAt, "TARGET_BLOCKED", "Target blocked by egress policy");
-  const result = await executePing(config.host, config.timeoutMs);
+  const target = await authorize(config.host);
+  if (!target) return failed(startedAt, "TARGET_BLOCKED", "Target blocked by egress policy");
+  const result = await executePing(target.address, config.timeoutMs);
   return result.ok ? result : { ok: false, latencyMs: result.latencyMs, errorCode: "ICMP_FAILED", errorMessage: "ICMP echo failed" };
 }

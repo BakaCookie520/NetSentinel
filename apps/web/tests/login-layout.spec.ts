@@ -1,4 +1,5 @@
 import { expect, test, type Locator } from "@playwright/test";
+test.use({ storageState: { cookies: [], origins: [] } });
 
 async function box(locator: Locator) {
   await expect(locator).toBeVisible();

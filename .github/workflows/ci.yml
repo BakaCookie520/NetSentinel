@@ -70,19 +70,22 @@ jobs:
           PGPASSWORD: integration-postgres-password
         run: |
           createdb --host 127.0.0.1 --username netsentinel netsentinel_backup_test
-          docker run -d --name netsentinel-backup-redis -p 16379:6379 redis:7-alpine
+          docker run -d --name netsentinel-backup-redis -p 16379:6379 redis:7-alpine redis-server --appendonly yes --maxmemory-policy noeviction
           export DATABASE_URL=postgresql://netsentinel:integration-postgres-password@127.0.0.1:5432/netsentinel_backup_test
           export REDIS_PORT=16379
           export NETSENTINEL_BACKUP_INTEGRATION=true
           pnpm --filter @netsentinel/database prisma:migrate
           pnpm --filter @netsentinel/api exec vitest run src/backup.integration.test.ts
+          ONBOARDING_POSTGRES_URL="$DATABASE_URL" ONBOARDING_REDIS_URL=redis://127.0.0.1:16379 pnpm --filter @netsentinel/api exec vitest run src/portable.matrix.test.ts
       - name: Start E2E API
         run: |
           export NETSENTINEL_DATA_DIR="$RUNNER_TEMP/netsentinel-data"
+          unset DATABASE_URL REDIS_URL REDIS_HOST INITIAL_ADMIN_EMAIL INITIAL_ADMIN_PASSWORD
           nohup node apps/api/dist/main.js > "$RUNNER_TEMP/netsentinel-api.log" 2>&1 &
           api_pid=$!
           for attempt in {1..30}; do
             if curl --fail --silent http://127.0.0.1:3000/api/v1/health/ready > /dev/null; then
+              node scripts/prepare-e2e.mjs
               exit 0
             fi
             if ! kill -0 "$api_pid" 2>/dev/null; then
@@ -105,9 +108,59 @@ jobs:
           retention-days: 7
       - name: Build unified application image
         run: docker build --build-arg VITE_DEMO_MODE=false --tag netsentinel:ci .
+      - name: Verify isolated single-container SQLite persistence
+        run: |
+          docker volume create netsentinel-smoke-data
+          docker run -d --name netsentinel-smoke --network none -v netsentinel-smoke-data:/app/data netsentinel:ci
+          for attempt in {1..60}; do
+            if docker exec netsentinel-smoke node -e "fetch('http://127.0.0.1:3000/api/v1/setup/status').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"; then break; fi
+            sleep 1
+          done
+          docker cp scripts/prepare-e2e.mjs netsentinel-smoke:/tmp/prepare-e2e.mjs
+          docker exec -e NETSENTINEL_DATA_DIR=/app/data netsentinel-smoke node /tmp/prepare-e2e.mjs
+          docker stop netsentinel-smoke
+          docker rm netsentinel-smoke
+          docker run -d --name netsentinel-smoke --network none -v netsentinel-smoke-data:/app/data netsentinel:ci
+          for attempt in {1..60}; do
+            if docker exec netsentinel-smoke node -e "fetch('http://127.0.0.1:3000/api/v1/health/ready').then(r=>r.json()).then(s=>{if(s.status!=='ready'||!s.workerConnected)process.exit(1)}).catch(()=>process.exit(1))"; then exit 0; fi
+            sleep 1
+          done
+          docker logs netsentinel-smoke
+          exit 1
+
+  storage-matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        database: [sqlite, postgresql, redis]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Provision only the selected external database
+        run: |
+          if [ "${{ matrix.database }}" = postgresql ]; then
+            docker run -d --name storage-postgres -p 15432:5432 -e POSTGRES_USER=netsentinel -e POSTGRES_PASSWORD=storage-test-password -e POSTGRES_DB=netsentinel_storage_test postgres:16-alpine
+            until docker exec storage-postgres pg_isready -U netsentinel -d netsentinel_storage_test; do sleep 1; done
+            echo "ONBOARDING_POSTGRES_URL=postgresql://netsentinel:storage-test-password@127.0.0.1:15432/netsentinel_storage_test" >> "$GITHUB_ENV"
+            DATABASE_URL=postgresql://netsentinel:storage-test-password@127.0.0.1:15432/netsentinel_storage_test pnpm --filter @netsentinel/database prisma:migrate
+          elif [ "${{ matrix.database }}" = redis ]; then
+            docker run -d --name storage-redis -p 16379:6379 redis:7-alpine redis-server --appendonly yes --maxmemory-policy noeviction
+            until docker exec storage-redis redis-cli ping; do sleep 1; done
+            echo "ONBOARDING_REDIS_URL=redis://127.0.0.1:16379" >> "$GITHUB_ENV"
+          fi
+      - run: pnpm --filter @netsentinel/api exec vitest run src/storage.contract.test.ts src/combined.test.ts src/portable.matrix.test.ts
 
   publish:
-    needs: verify
+    needs: [verify, storage-matrix]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:

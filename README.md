@@ -12,7 +12,7 @@
   <strong>简体中文</strong> | <a href="./README.en.md">English</a>
 </p>
 
-NetSentinel 主动探测 HTTP(S)、WebSocket、TCP 和 ICMP 目标，在连接异常时创建事件，并自动或经过审批后执行恢复工作流。管理控制台基于 React、Vite 和 MUI，服务端采用 NestJS、PostgreSQL、Redis 与 BullMQ。
+NetSentinel 主动探测 HTTP(S)、WebSocket、TCP 和 ICMP 目标，在连接异常时创建事件，并自动或经过审批后执行恢复工作流。管理控制台基于 React、Vite 和 MUI，Node 服务集成 API 与持久化任务执行器，业务数据库可选内置 SQLite、外部 PostgreSQL 或外部 Redis。
 
 ## 主要功能
 
@@ -36,28 +36,23 @@ cd NetSentinel
 cp .env.example .env
 ```
 
-编辑 `.env`，至少替换数据库密码、初始管理员密码和主密钥。主密钥可通过下面的命令生成：
-
-```bash
-openssl rand -base64 32
-```
-
-构建并启动全部服务：
+新安装无需预填数据库或初始管理员密码。默认只启动一个应用容器：
 
 ```bash
 docker compose up --build -d
 docker compose ps
+docker compose logs app
 ```
 
-打开 `http://localhost:8080`，使用 `.env` 中的 `INITIAL_ADMIN_EMAIL` 和 `INITIAL_ADMIN_PASSWORD` 登录。管理员创建成功后应从 `.env` 删除初始密码；后续启动不会使用它覆盖现有账户。
+打开 `http://localhost:8080`，使用日志中的一次性安装令牌，依次选择数据库、设置管理员、保存账户恢复密钥（可选开启验证器 2FA），最后进入控制台。数据库连接和部署主密钥保存在 `/app/data` 持久化卷。详见 [初始化与迁移](docs/onboarding.md)。
 
-停止服务但保留 PostgreSQL 和 Redis 数据：
+停止服务但保留持久化数据：
 
 ```bash
 docker compose down
 ```
 
-> 不要使用 `docker compose down -v`，除非确定要删除数据库和队列数据。
+> 不要使用 `docker compose down -v`。旧站点不要直接套用新 Compose：先备份、停止旧 Worker 并排空队列，保留旧数据库和主密钥后按迁移文档接管。
 
 ## GHCR 镜像
 
@@ -83,7 +78,7 @@ pnpm install
 pnpm --filter @netsentinel/web dev
 ```
 
-前端默认使用交互式演示数据。连接真实 API 时将 `VITE_DEMO_MODE` 设置为 `false`。完整启动 API 和 worker 还需要 PostgreSQL、Redis，并需要把 `.env.example` 中的变量加载到当前终端环境；首次安装建议使用上面的 Docker 方式。
+前端默认使用交互式演示数据。连接真实 API 时将 `VITE_DEMO_MODE` 设置为 `false`。先执行 `pnpm build`，设置 `NETSENTINEL_DATA_DIR` 为可写的本地目录，然后运行 `node apps/api/dist/main.js`。SQLite 模式无需 PostgreSQL 或 Redis。
 
 ## 公开状态页
 
@@ -113,7 +108,7 @@ GET /api/v1/public/status
 ./infra/restore.ps1
 ```
 
-恢复脚本会停止 API 和 worker，并在替换数据库前要求确认。升级前应备份 PostgreSQL，并定期验证备份能否恢复。
+上述脚本仅适用于旧的 PostgreSQL/Redis 分离部署。新部署使用控制台的“备份与恢复”，逻辑备份可在三种数据库之间迁移。数据库切换需在新实例导入备份，不支持运行中热切换。
 
 ## Linux Agent
 
@@ -127,9 +122,10 @@ Linux Agent 只通过出站 WSS 连接服务器，不开放宿主机入站端口
 
 ## 安全说明
 
-- 将 `NETSENTINEL_MASTER_KEY` 保存在 Docker Secret 或其他秘密管理系统中；丢失主密钥后，已保存凭据无法恢复。
+- 默认部署主密钥位于 `/app/data/master.key`；也可通过 `NETSENTINEL_MASTER_KEY` 提供，二者冲突时拒绝启动。请备份整个持久化目录。
+- 账户恢复密钥用于重置密码，不是部署主密钥；TOTP 备用码仅用于替代第二因素。
 - 容器 Shell 以非特权 `node` 用户运行，并且不会挂载 Docker Socket。
-- Worker 仅为 ICMP 探测增加 `NET_RAW` 能力。
+- 单应用容器仅为 ICMP 探测增加 `NET_RAW` 能力，不需要特权模式或 Docker Socket。
 - 当前 SSH 动作默认接受目标服务器提供的任意主机密钥，无法防止 SSH 中间人攻击；请只在可信网络路径中使用。
 - 对外开放前请使用 HTTPS 反向代理保护实例，不要直接暴露 HTTP 管理端口。
 
@@ -147,4 +143,4 @@ CI 还会使用真实 PostgreSQL、Redis、API 和 Playwright 执行浏览器流
 
 管理导航中的「备份与恢复」支持独立口令加密、手动/定时完整站点备份、导入导出和
 覆盖恢复。备份与头像保存在现有 `app-data` 卷中。使用方法和恢复注意事项见
-[备份说明](docs/backups.md)。上线时需同时更新 app 与 worker，并运行数据库迁移。
+[备份说明](docs/backups.md)。旧四容器站点升级前必须按[迁移步骤](docs/onboarding.md)停用旧 Worker。

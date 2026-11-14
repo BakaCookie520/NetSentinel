@@ -9,7 +9,7 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { Prisma, PrismaClient, ApprovalMode, ApprovalStatus, CredentialType, IncidentStatus, MonitorType, RunStatus, StepType, TriggerType } from "@netsentinel/database";
 import { monitorInputSchema, workflowStepInputSchema } from "@netsentinel/contracts";
-import { advanceMonitorState, decryptSecret, isAddressAllowed, renderCommandTemplate, runHttpProbe, runIcmpProbe, runTcpProbe, runWebSocketProbe, type ProbeResult, type SecretEnvelope } from "@netsentinel/core";
+import { advanceMonitorState, createPinnedDispatcher, decryptSecret, isAddressAllowed, renderCommandTemplate, runHttpProbe, runIcmpProbe, runTcpProbe, runWebSocketProbe, type AuthorizedTarget, type ProbeResult, type SecretEnvelope } from "@netsentinel/core";
 import { probeJobId } from "./job-ids.js";
 import { buildCredentialHeaders, materializeWebSocketCredential, type HttpCredentialType, type WebSocketCredentialType } from "./credential-headers.js";
 import { buildSshConnectionConfig, materializeSshCredential, validateSshPrivateKey } from "./ssh-credentials.js";
@@ -40,17 +40,32 @@ if (masterKey.length !== 32) throw new Error("NETSENTINEL_MASTER_KEY must be a b
 
 const publish = async (type: string, data: unknown) => publisher.publish("netsentinel:events", JSON.stringify({ type, data }));
 
-async function authorizeHostname(hostname: string): Promise<boolean> {
+async function authorizeHostname(hostname: string): Promise<AuthorizedTarget | null> {
   try {
     const settings = await prisma.setting.findMany({ where: { key: { in: ["egressAllow", "egressDeny"] } } });
     const rules = new Map(settings.map((setting) => [setting.key, Array.isArray(setting.value) ? setting.value.map(String) : []]));
     const allow = rules.get("egressAllow") ?? []; const deny = rules.get("egressDeny") ?? [];
     const matchesHost = (rule: string) => rule.startsWith("*.") ? hostname.endsWith(rule.slice(1)) : hostname === rule;
-    if (deny.some((rule) => !rule.includes("/") && matchesHost(rule))) return false;
+    if (deny.some((rule) => !rule.includes("/") && matchesHost(rule))) return null;
     const hostAllowed = allow.some((rule) => !rule.includes("/") && matchesHost(rule));
     const addresses = await lookup(hostname, { all: true, verbatim: true });
-    return addresses.length > 0 && addresses.every(({ address }) => hostAllowed || isAddressAllowed(address, { allow: allow.filter((rule) => rule.includes("/")), deny: deny.filter((rule) => rule.includes("/")) }));
-  } catch { return false; }
+    if (
+      !addresses.length ||
+      !addresses.every(
+        ({ address }) =>
+          hostAllowed ||
+          isAddressAllowed(address, {
+            allow: allow.filter((rule) => rule.includes("/")),
+            deny: deny.filter((rule) => rule.includes("/")),
+          }),
+      )
+    ) {
+      return null;
+    }
+    const selected = addresses[0];
+    if (!selected || (selected.family !== 4 && selected.family !== 6)) return null;
+    return { address: selected.address, family: selected.family };
+  } catch { return null; }
 }
 
 async function isInMaintenance(monitorId: string, now = new Date()): Promise<boolean> {
@@ -221,6 +236,8 @@ async function runProcess(command: string, timeoutMs: number): Promise<ActionRes
 }
 
 async function runSsh(config: Record<string, unknown>, credentialType: CredentialType | null, secret: string, command: string, timeoutMs: number): Promise<ActionResult> {
+  const target = await authorizeHostname(String(config.host));
+  if (!target) return { status: RunStatus.FAILED, error: "EGRESS_BLOCKED: target is not allowed" };
   let authentication;
   try {
     authentication = materializeSshCredential(String(credentialType), secret);
@@ -242,7 +259,7 @@ async function runSsh(config: Record<string, unknown>, credentialType: Credentia
     }));
     client.on("error", () => finish({ status: RunStatus.FAILED, error: "SSH connection failed" }));
     try {
-      client.connect(buildSshConnectionConfig(config as { host: unknown; port?: unknown; username: unknown }, authentication, timeoutMs));
+      client.connect(buildSshConnectionConfig({ ...config, host: target.address } as { host: unknown; port?: unknown; username: unknown }, authentication, timeoutMs));
     } catch {
       finish({ status: RunStatus.FAILED, error: "CONFIG_INVALID: SSH connection settings are invalid" });
     }
@@ -252,18 +269,23 @@ async function runSsh(config: Record<string, unknown>, credentialType: Credentia
 async function runHttpAction(config: Record<string, unknown>, headers: Record<string, string>, idempotencyKey: string, timeoutMs: number): Promise<ActionResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const dispatcher = config.verifyTls === false ? new Agent({ connect: { rejectUnauthorized: false } }) : undefined;
+  let dispatcher: Agent | undefined;
   let url = String(config.url);
   let method = String(config.method ?? "POST");
   let body = typeof config.body === "string" ? config.body : undefined;
   try {
     for (let redirects = 0; redirects <= 5; redirects += 1) {
       const target = new URL(url);
-      if (!["http:", "https:"].includes(target.protocol) || !await authorizeHostname(target.hostname)) return { status: RunStatus.FAILED, error: "EGRESS_BLOCKED: target is not allowed" };
+      const authorized = ["http:", "https:"].includes(target.protocol)
+        ? await authorizeHostname(target.hostname)
+        : null;
+      if (!authorized) return { status: RunStatus.FAILED, error: "EGRESS_BLOCKED: target is not allowed" };
+      await dispatcher?.close();
+      dispatcher = createPinnedDispatcher(authorized, config.verifyTls !== false);
       const response = await fetch(target, {
         method, headers: { ...headers, "idempotency-key": idempotencyKey },
         ...(method !== "GET" && method !== "HEAD" && body !== undefined ? { body } : {}),
-        redirect: "manual", signal: controller.signal, ...(dispatcher ? { dispatcher } : {}),
+        redirect: "manual", signal: controller.signal, dispatcher,
       });
       if (response.status >= 300 && response.status < 400 && response.headers.get("location")) {
         if (redirects === 5) return { status: RunStatus.FAILED, error: "Too many redirects" };

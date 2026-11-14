@@ -5,7 +5,7 @@ const workflow = readFileSync(new URL("../.github/workflows/ci.yml", import.meta
 
 for (const requiredFragment of [
   "publish:",
-  "needs: verify",
+  "needs: [verify, storage-matrix]",
   "github.event_name == 'push' && github.ref == 'refs/heads/main'",
   "packages: write",
   "ghcr.io/bakacookie520/netsentinel",

@@ -393,3 +393,25 @@ model Setting {
   version Int @default(1)
   updatedAt DateTime @updatedAt
 }
+
+model AccountSecurity {
+  userId String @id
+  totpEncrypted Json?
+  totpLastCounter Int @default(-1)
+  recoveryHash String?
+  backupHashes String[]
+  version Int @default(1)
+}
+
+model DurableJob {
+  id String @id
+  kind String
+  ownerId String
+  status String @default("PENDING")
+  availableAt DateTime @default(now())
+  startedAt DateTime?
+  finishedAt DateTime?
+  error String?
+  version Int @default(1)
+  @@index([status, availableAt])
+}

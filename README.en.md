@@ -12,7 +12,7 @@
   <a href="./README.md">简体中文</a> | <strong>English</strong>
 </p>
 
-NetSentinel actively probes HTTP(S), WebSocket, TCP, and ICMP targets. It opens incidents when connections fail and runs recovery workflows automatically or after approval. The management console uses React, Vite, and MUI; the backend uses NestJS, PostgreSQL, Redis, and BullMQ.
+NetSentinel actively probes HTTP(S), WebSocket, TCP, and ICMP targets. It opens incidents when connections fail and runs recovery workflows automatically or after approval. React/Vite/MUI provide the console; a combined Node API and durable executor use built-in SQLite, external PostgreSQL or external Redis as the selected business database.
 
 ## Features
 
@@ -36,28 +36,27 @@ cd NetSentinel
 cp .env.example .env
 ```
 
-Edit `.env` and replace at least the database password, initial administrator password, and master key. Generate a master key with:
-
-```bash
-openssl rand -base64 32
-```
-
-Build and start the complete stack:
+No database or default administrator password is required for a fresh install.
+Start the single application container:
 
 ```bash
 docker compose up --build -d
 docker compose ps
+docker compose logs app
 ```
 
-Open `http://localhost:8080` and sign in with `INITIAL_ADMIN_EMAIL` and `INITIAL_ADMIN_PASSWORD`. Remove the initial password from `.env` after the administrator is created; later starts never use it to overwrite an existing account.
+Open `http://localhost:8080`, enter the one-time token from the logs, select storage,
+create your administrator and save the account recovery key. Authenticator 2FA is
+optional. Persist all of `/app/data`. See [setup and migration](docs/onboarding.md).
 
-Stop the stack while preserving PostgreSQL and Redis data:
+Stop the application while preserving data:
 
 ```bash
 docker compose down
 ```
 
-> Do not run `docker compose down -v` unless you intend to delete the database and queue data.
+> Do not run `docker compose down -v`. Existing deployments must retain their
+> database and encryption key, stop the legacy Worker and drain its queue before migration.
 
 ## GHCR Images
 
@@ -83,7 +82,7 @@ pnpm install
 pnpm --filter @netsentinel/web dev
 ```
 
-The frontend uses interactive demo data by default. Set `VITE_DEMO_MODE=false` to connect it to the real API. Running the complete API and worker stack also requires PostgreSQL, Redis, and the variables from `.env.example` loaded into the current shell; the Docker setup above is recommended for a first installation.
+The frontend uses interactive demo data by default. Set `VITE_DEMO_MODE=false` to connect to the real API. Run `pnpm build`, set `NETSENTINEL_DATA_DIR` to a writable directory and start `node apps/api/dist/main.js`. SQLite mode requires no PostgreSQL or Redis.
 
 ## Public Status Page
 
@@ -113,7 +112,7 @@ For a dedicated status domain, proxy the domain root to `http://127.0.0.1:8080` 
 ./infra/restore.ps1
 ```
 
-The restore script stops the API and worker and asks for confirmation before replacing the database. Back up PostgreSQL before upgrades and regularly test that backups can be restored.
+These scripts target the legacy split PostgreSQL/Redis deployment only. New installations use the backup console; logical backups can migrate between all three backends. There is no live database switching.
 
 ## Linux Agent
 
@@ -129,7 +128,7 @@ You can also download a release generated from an `agent-v*` tag. Extract it on 
 
 - Store `NETSENTINEL_MASTER_KEY` in Docker Secret or another secret manager. Losing it makes stored credentials unrecoverable.
 - Container shell steps run as the unprivileged `node` user and do not receive the Docker socket.
-- Only the worker receives the `NET_RAW` capability required for ICMP probes.
+- The combined application receives `NET_RAW` for ICMP probes; no privileged mode or Docker Socket is required.
 - SSH actions currently accept any host key presented by the target and therefore do not prevent SSH man-in-the-middle attacks. Use them only over a trusted network path.
 - Put the service behind an HTTPS reverse proxy before exposing it publicly; do not expose the plain HTTP management port directly.
 
@@ -148,4 +147,4 @@ CI also runs browser flows against real PostgreSQL, Redis, and API services with
 The administration navigation includes encrypted whole-site backups, daily/weekly
 schedules, import/export and protected full restoration. Archives and avatars use
 the existing `app-data` volume. See [backup documentation](docs/backups.md).
-Upgrade both app and worker and apply database migrations when releasing.
+Follow the legacy migration steps before replacing a split app/worker deployment.

@@ -39,4 +39,8 @@ async function bootstrap(): Promise<void> {
   await app.listen(Number(process.env.PORT ?? 3000), "0.0.0.0");
 }
 
-void bootstrap();
+void import("./combined/server.js").then(({ startCombinedApplication }) => startCombinedApplication()).catch((error: unknown) => {
+  const code = error instanceof Error && /^[A-Z][A-Z0-9_]+$/u.test(error.message) ? error.message : "STARTUP_FAILED";
+  console.error(`NetSentinel could not start (${code}). Check persistent storage, database availability and legacy worker migration.`);
+  process.exitCode = 1;
+});

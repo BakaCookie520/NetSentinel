@@ -220,6 +220,8 @@ export interface CurrentUser {
   avatarUrl: string | null;
   permissions: string[];
   authentication?: "session" | "token";
+  forcePasswordChange: boolean;
+  securitySetupRequired?: boolean;
 }
 
 export class ApiError extends Error {
@@ -235,6 +237,9 @@ export class ApiError extends Error {
 
 const demo = import.meta.env.VITE_DEMO_MODE !== "false";
 let csrfToken = sessionStorage.getItem("netsentinel.csrf") ?? "";
+window.addEventListener("netsentinel:session", (event) => {
+  csrfToken = (event as CustomEvent<string>).detail;
+});
 const demoMonitors: Monitor[] = [];
 const demoWorkflows: Workflow[] = [];
 const demoCredentials: Credential[] = [];
@@ -313,7 +318,7 @@ export const api = {
   async login(email: string, password: string) {
     if (demo)
       return {
-        user: { id: "demo", email, displayName: "管理员", permissions: ["*"] },
+        user: { id: "demo", email, displayName: "Administrator", avatarUrl: null, permissions: ["*"], authentication: "session" as const, forcePasswordChange: false },
         csrfToken: "demo",
       };
     const result = await request<{
@@ -323,6 +328,7 @@ export const api = {
         displayName: string;
         avatarUrl: string | null;
         permissions: string[];
+        forcePasswordChange: boolean;
       };
       csrfToken: string;
     }>("/auth/login", json("POST", { email, password }));
@@ -340,6 +346,7 @@ export const api = {
           avatarUrl: null,
           permissions: ["*"],
           authentication: "session" as const,
+          forcePasswordChange: false,
         },
       };
     }
@@ -352,6 +359,13 @@ export const api = {
     return request<{ user: CurrentUser }>(
       "/auth/me",
       json("PATCH", { displayName }),
+    );
+  },
+  async changePassword(currentPassword: string, newPassword: string) {
+    if (demo) return { ok: true };
+    return request<{ ok: true }>(
+      "/auth/me/password",
+      json("POST", { currentPassword, newPassword }),
     );
   },
   async uploadAvatar(file: File) {

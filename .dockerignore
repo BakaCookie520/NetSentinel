@@ -9,3 +9,10 @@ apps/web/playwright-report
 *.log
 .env
 .git
+.runtime
+.scratch
+.pnpm-store
+.node-compile-cache
+artifacts
+**/.env
+**/.env.*

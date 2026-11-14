@@ -14,7 +14,13 @@ export async function atomicJson(path: string, value: unknown): Promise<void> {
     await writeFile(temporary, JSON.stringify(value), { mode: 0o600, flag: "wx" });
     const handle = await open(temporary, "r+");
     try { await handle.sync(); } finally { await handle.close(); }
-    await rename(temporary, path);
+    for (let attempt = 0; ; attempt += 1) {
+      try { await rename(temporary, path); break; }
+      catch (error) {
+        if (process.platform !== "win32" || !["EPERM", "EACCES", "EBUSY"].includes((error as NodeJS.ErrnoException).code ?? "") || attempt >= 4) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)));
+      }
+    }
     // fsync the containing directory as well as the file: recovery journals
     // must survive power loss, not merely an orderly process restart.
     if (process.platform !== "win32") {
@@ -45,6 +51,11 @@ export async function syncAvatarStage(stage: string): Promise<void> {
     const handle = await open(path, "r");
     try { await handle.sync(); } finally { await handle.close(); }
   }
+}
+export async function syncDirectory(path: string): Promise<void> {
+  if (process.platform === "win32") return;
+  const handle = await open(path, "r");
+  try { await handle.sync(); } finally { await handle.close(); }
 }
 export function configuredLimit(name: string, fallback: number): number {
   const raw = process.env[name];

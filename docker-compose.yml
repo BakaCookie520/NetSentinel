@@ -1,50 +1,23 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: netsentinel
-      POSTGRES_USER: netsentinel
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U netsentinel -d netsentinel"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-    restart: unless-stopped
-
-  redis:
-    image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes:
-      - redis-data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-    restart: unless-stopped
-
   app:
     image: ${NETSENTINEL_IMAGE:-ghcr.nju.edu.cn/bakacookie520/netsentinel:latest}
+    container_name: NetSentinel
+    init: true
     build:
       context: .
       dockerfile: Dockerfile
       args:
         VITE_DEMO_MODE: "false"
-    command: ["sh", "-c", "pnpm --filter @netsentinel/database prisma:migrate && node apps/api/dist/bootstrap-admin.js && node apps/api/dist/main.js"]
+    command: ["node", "apps/api/dist/main.js"]
     environment:
-      DATABASE_URL: postgresql://netsentinel:${POSTGRES_PASSWORD}@postgres:5432/netsentinel
-      REDIS_URL: redis://redis:6379
-      REDIS_HOST: redis
-      NETSENTINEL_MASTER_KEY: ${NETSENTINEL_MASTER_KEY}
-      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL}
-      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
-      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:8080}
-      COOKIE_SECURE: "false"
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
       PORT: 3000
       NETSENTINEL_DATA_DIR: /app/data
+      NETSENTINEL_MASTER_KEY: ${NETSENTINEL_MASTER_KEY:-}
+      DATABASE_URL: ${DATABASE_URL:-}
+      WEB_ORIGIN: ${WEB_ORIGIN:-}
+      REDIS_URL: ${REDIS_URL:-}
       NETSENTINEL_BACKUP_UPLOAD_MAX_BYTES: ${NETSENTINEL_BACKUP_UPLOAD_MAX_BYTES:-1073741824}
       NETSENTINEL_BACKUP_EXPANDED_MAX_BYTES: ${NETSENTINEL_BACKUP_EXPANDED_MAX_BYTES:-10737418240}
       NETSENTINEL_RESTORE_DRAIN_TIMEOUT_MS: ${NETSENTINEL_RESTORE_DRAIN_TIMEOUT_MS:-600000}
@@ -52,9 +25,7 @@ services:
       - "${NETSENTINEL_HTTP_PORT:-8080}:3000"
     volumes:
       - app-data:/app/data
-    depends_on:
-      postgres: { condition: service_healthy }
-      redis: { condition: service_healthy }
+    cap_add: ["NET_RAW"]
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/v1/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 10s
@@ -62,19 +33,5 @@ services:
       retries: 20
     restart: unless-stopped
 
-  worker:
-    image: ${NETSENTINEL_IMAGE:-ghcr.nju.edu.cn/bakacookie520/netsentinel:latest}
-    command: ["node", "apps/worker/dist/main.js"]
-    environment:
-      DATABASE_URL: postgresql://netsentinel:${POSTGRES_PASSWORD}@postgres:5432/netsentinel
-      REDIS_HOST: redis
-      NETSENTINEL_MASTER_KEY: ${NETSENTINEL_MASTER_KEY}
-    cap_add: ["NET_RAW"]
-    depends_on:
-      app: { condition: service_healthy }
-    restart: unless-stopped
-
 volumes:
-  postgres-data:
-  redis-data:
   app-data:
