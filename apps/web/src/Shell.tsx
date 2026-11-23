@@ -67,8 +67,6 @@ const nav = [
   ["/logs", "logs", ReceiptLongOutlined],
   ["/audit", "audit", HistoryOutlined],
   ["/settings", "settings", SettingsOutlined],
-  ["/backups", "backups", HistoryOutlined],
-  ["/security", "security", ShieldOutlined],
 ] as const;
 const navSections = [
   { label: "operations", items: nav.slice(0, 3) },
@@ -265,7 +263,6 @@ export function Shell({
               {t(`shell.${section.label}`)}
             </ListSubheader>
             {section.items.map(([path, key, Icon]) => {
-              if (path === "/backups" && !user.permissions.includes("backup:manage") && !user.permissions.includes("*")) return null;
               const selected = path === "/" ? location.pathname === "/" : location.pathname.startsWith(path);
               return (
                 <ListItemButton
@@ -425,7 +422,7 @@ export function Shell({
           <Typography variant="caption" color="text.secondary" noWrap>{user.email}</Typography>
         </Box>
         <Divider />
-        <MenuItem onClick={() => { setAccountAnchor(null); navigate("/security"); }}>
+        <MenuItem onClick={() => { setAccountAnchor(null); navigate("/settings/security"); }}>
           <ShieldOutlined fontSize="small" sx={{ mr: 1.25 }} />{t("onboarding.accountSecurity")}
         </MenuItem>
         <MenuItem onClick={() => {
@@ -520,7 +517,7 @@ export function Shell({
         }}
       >
         <Box sx={{ p: { xs: 2, sm: 2.5, lg: 3 }, maxWidth: 1500, mx: "auto" }}>
-          {user.securitySetupRequired && location.pathname !== "/security" && <Alert severity="info" sx={{ mb: 2 }} action={<Button onClick={() => navigate("/security")}>{t("onboarding.accountSecurity")}</Button>}>{t("onboarding.optionalSecurity")}</Alert>}
+          {user.securitySetupRequired && location.pathname !== "/settings/security" && <Alert severity="info" sx={{ mb: 2 }} action={<Button onClick={() => navigate("/settings/security")}>{t("onboarding.accountSecurity")}</Button>}>{t("onboarding.optionalSecurity")}</Alert>}
           <Outlet />
         </Box>
       </Box>

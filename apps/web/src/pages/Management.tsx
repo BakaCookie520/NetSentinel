@@ -48,6 +48,7 @@ import {
   TerminalOutlined,
 } from "@mui/icons-material";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import {
   PERMISSIONS,
   credentialInputSchema,
@@ -1984,6 +1985,7 @@ const defaultSettings: SettingsDraft = {
   statusPageSupportUrl: "",
 };
 export function SettingsPage() {
+  const { t } = useTranslation();
   const client = useQueryClient();
   const query = useQuery({ queryKey: ["settings"], queryFn: api.settings });
   const [draft, setDraft] = useState(defaultSettings);
@@ -2063,8 +2065,8 @@ export function SettingsPage() {
   return (
     <>
       <PageHeader
-        title="系统设置"
-        subtitle="配置实例时区、数据保留、出口策略和自身可观测性。"
+        title={t("settingsNavigation.general")}
+        subtitle={t("settingsNavigation.generalDescription")}
         action={
           <Button
             variant="contained"

@@ -206,4 +206,32 @@ i18n.addResourceBundle("en-US", "translation", {
     saving: "Saving…",
   },
 }, true, true);
+i18n.addResourceBundle("zh-CN", "translation", {
+  settingsNavigation: {
+    label: "系统设置子页面",
+    general: "常规设置",
+    generalHint: "实例、外观与运行策略",
+    generalDescription: "配置实例时区、状态页、主题色、数据保留与出口策略。",
+    backups: "备份与恢复",
+    backupsHint: "备份口令、定时备份与数据迁移",
+    security: "账户安全",
+    securityHint: "双重验证、恢复密钥与备用码",
+    forbidden: "你没有访问此设置页面的权限，请选择其他设置。",
+    loadError: "无法加载账户权限，请刷新页面重试。",
+  },
+}, true, true);
+i18n.addResourceBundle("en-US", "translation", {
+  settingsNavigation: {
+    label: "Settings pages",
+    general: "General settings",
+    generalHint: "Instance, appearance and operations",
+    generalDescription: "Configure the instance timezone, status page, accent color, retention and egress policies.",
+    backups: "Backups & recovery",
+    backupsHint: "Passphrase, schedules and migration",
+    security: "Account security",
+    securityHint: "Two-factor authentication and recovery",
+    forbidden: "You do not have access to this settings page. Choose another section.",
+    loadError: "Could not load account permissions. Refresh the page to retry.",
+  },
+}, true, true);
 export default i18n;
