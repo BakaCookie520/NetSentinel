@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
+import { createRequire, syncBuiltinESMExports } from "node:module";
 import express from "express";
 import { encryptSecret, decryptSecret, type SecretEnvelope } from "@netsentinel/core";
 import type { ApplicationState } from "./combined/setup.js";
@@ -54,6 +55,11 @@ async function wait(backups: PortableBackups, job: BackupJob) {
   }
   throw new Error("Backup job timed out");
 }
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((complete) => { resolve = complete; });
+  return { promise, resolve };
+}
 for (const source of kinds) for (const target of kinds) describe(`portable ${source} -> ${target}`, () => {
   it("restores full business data and re-encrypts credentials/TOTP without replaying actions", async () => {
     const origin = await create(source, 5);
@@ -95,6 +101,35 @@ for (const source of kinds) for (const target of kinds) describe(`portable ${sou
   }, 120000);
 });
 describe("portable restore protection", () => {
+  it("keeps import running until its durable completion releases the backup lock", async () => {
+    const { backups } = await create("sqlite", 4);
+    const finishImport = deferred();
+    const allowFinalization = deferred();
+    let terminalRenamed = false;
+    const imported = await backups.start("import", () => finishImport.promise);
+    const filesystem = createRequire(import.meta.url)("node:fs/promises") as typeof import("node:fs/promises");
+    const rename = filesystem.rename;
+    const spy = vi.spyOn(filesystem, "rename").mockImplementation(async (source, target) => {
+      await rename(source, target);
+      if (target === backups.path(imported.id, "job")) {
+        terminalRenamed = true;
+        await allowFinalization.promise;
+      }
+    });
+    syncBuiltinESMExports();
+    try {
+      finishImport.resolve();
+      await vi.waitFor(() => expect(terminalRenamed).toBe(true));
+      expect((await backups.job(imported.id)).status).toBe("running");
+      await expect(backups.start("restore", async () => undefined)).rejects.toThrow("BACKUP_BUSY");
+    } finally {
+      allowFinalization.resolve();
+      spy.mockRestore();
+      syncBuiltinESMExports();
+    }
+    await wait(backups, imported);
+    await wait(backups, await backups.start("restore", async () => undefined));
+  });
   it("converts a version-one backup with the published cf49ab0 schema fingerprint", async () => {
     const origin = await create("sqlite", 9);
     const { TABLES } = await import("./backup-database.js");

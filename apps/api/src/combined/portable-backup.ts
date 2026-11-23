@@ -91,6 +91,7 @@ export class PortableBackups {
     return join(this.directory, `${z.string().uuid().parse(id)}.${z.enum(["nsbackup", "json", "job", "partial"]).parse(extension)}`);
   }
   private timer?: ReturnType<typeof setInterval>;
+  private activeJobId?: string;
   private operations = new Set<Promise<void>>();
   constructor(private app: Express, readonly state: ApplicationState) {}
   private store() { if (!this.state.store) throw new Error("SETUP_REQUIRED"); return this.state.store; }
@@ -114,20 +115,29 @@ export class PortableBackups {
     this.busy = true; this.app.locals.backupBusy = true;
     try { return await operation(); } finally { this.busy = false; this.app.locals.backupBusy = false; }
   }
-  async job(id: string) { const job = await readJson<BackupJob | null>(this.path(id, "job"), null); if (!job) throw new Error("NOT_FOUND"); return job; }
+  async job(id: string): Promise<BackupJob> {
+    const job = await readJson<BackupJob | null>(this.path(id, "job"), null);
+    if (!job) throw new Error("NOT_FOUND");
+    if (this.activeJobId === id && job.status !== "running") {
+      return { ...job, status: "running", phase: "finalizing", finishedAt: undefined, error: undefined };
+    }
+    return job;
+  }
   async start(type: BackupJob["type"], action: (job: BackupJob) => Promise<void>) {
     if (this.busy || this.state.runtime?.restoring) throw new Error("BACKUP_BUSY");
     const job: BackupJob = { id: randomUUID(), type, status: "running", phase: "preparing", createdAt: new Date().toISOString() };
     this.busy = true; this.app.locals.backupBusy = true;
     try { await atomicJson(this.path(job.id, "job"), job); }
     catch (error) { this.busy = false; this.app.locals.backupBusy = false; throw error; }
+    this.activeJobId = job.id;
+    const started = { ...job };
     const operation = (async () => {
       try { await action(job); job.status = "succeeded"; job.phase = "complete"; }
       catch (error) { job.status = "failed"; job.error = errorCode(error); }
       finally {
         job.finishedAt = new Date().toISOString();
         try { await atomicJson(this.path(job.id, "job"), job); }
-        finally { this.busy = false; this.app.locals.backupBusy = false; }
+        finally { this.activeJobId = undefined; this.busy = false; this.app.locals.backupBusy = false; }
       }
     })();
     this.operations.add(operation);
@@ -136,7 +146,7 @@ export class PortableBackups {
       const code = (error as NodeJS.ErrnoException)?.code;
       console.error(`BACKUP_JOB_FINALIZATION_FAILED:${typeof code === "string" && /^[A-Z]+$/u.test(code) ? code : "UNKNOWN"}`);
     });
-    return { ...job };
+    return started;
   }
   async initialize() {
     await mkdir(this.directory, { recursive: true, mode: 0o700 });
