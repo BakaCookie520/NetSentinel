@@ -101,7 +101,7 @@ test("existing users expose versioned role and profile editing", async ({
   await page.getByRole("button", { name: "用户与权限", exact: true }).click();
   const row = page
     .getByRole("row")
-    .filter({ hasText: "admin@netsentinel.local" });
+    .filter({ has: page.getByText("admin", { exact: true }) });
   await row.getByRole("button", { name: "编辑" }).click();
   const dialog = page.getByRole("dialog", { name: "编辑用户" });
   await expect(dialog.getByLabel("显示名称")).not.toHaveValue("");

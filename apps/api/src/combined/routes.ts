@@ -10,6 +10,7 @@ import type { UnitOfWork } from "../storage/store.js";
 import { requirePermission as permission, type UserRequest } from "./auth-routes.js";
 import { type ApplicationState } from "./setup.js";
 import { digest, passwordHash, identity } from "./security.js";
+import { usernameSchema } from "./account-name.js";
 import { maintenanceActive } from "./runtime.js";
 import { mapPublicOverallStatus, mapPublicServiceStatus } from "../public-status-state.js";
 
@@ -270,10 +271,10 @@ export function mountBusiness(app: Express, state: ApplicationState) {
     ...publicUser(user), roles: await Promise.all((await store().all("UserRole", [eq("userId", user.id)])).map(async (link) => ({ role: await required("Role", link.roleId) }))),
   })))));
   app.post("/api/v1/admin/users", permission("user:manage"), async (request, response) => {
-    const input = z.object({ email: z.string().email(), displayName: nameSchema, password: z.string().min(12).max(1024), roleIds: z.array(z.string()) }).parse(request.body);
+    const input = z.object({ username: usernameSchema, displayName: nameSchema, password: z.string().min(12).max(1024), roleIds: z.array(z.string()) }).parse(request.body);
     const encoded = await passwordHash(input.password);
     const user = await store().transaction(async (tx) => {
-      const user = await tx.put("User", { email: input.email.toLowerCase(), displayName: input.displayName, passwordHash: encoded, forcePasswordChange: true });
+      const user = await tx.put("User", { username: input.username, displayName: input.displayName, passwordHash: encoded, forcePasswordChange: true });
       for (const roleId of input.roleIds) await tx.put("UserRole", { userId: user.id, roleId });
       return user;
     }); response.status(201).json(publicUser(user));

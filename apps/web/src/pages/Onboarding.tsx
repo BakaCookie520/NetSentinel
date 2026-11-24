@@ -27,7 +27,7 @@ export function OnboardingPage({ status, onComplete }: { status: SetupStatus; on
   const [host, setHost] = useState(""); const [port, setPort] = useState(5432); const [dbName, setDbName] = useState("netsentinel");
   const [dbUser, setDbUser] = useState(""); const [dbPassword, setDbPassword] = useState(""); const [tls, setTls] = useState(false);
   const [dbNumber, setDbNumber] = useState(0); const [namespace, setNamespace] = useState("netsentinel");
-  const [email, setEmail] = useState(""); const [displayName, setDisplayName] = useState("");
+  const [username, setUsername] = useState(""); const [identifier, setIdentifier] = useState(""); const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState(""); const [confirmation, setConfirmation] = useState("");
   const [enableTotp, setEnableTotp] = useState(false); const [code, setCode] = useState("");
   const [draft, setDraft] = useState<SecurityDraft>(); const [saved, setSaved] = useState(false);
@@ -49,14 +49,14 @@ export function OnboardingPage({ status, onComplete }: { status: SetupStatus; on
     } finally { setBusy(false); }
   };
   const unlock = () => run(async () => {
-    const response = await onboarding.unlock(token); setCsrf(response.csrfToken); setEmail(response.email ?? ""); setDisplayName(response.displayName ?? "");
+    const response = await onboarding.unlock(token); setCsrf(response.csrfToken); setUsername(response.username ?? ""); setDisplayName(response.displayName ?? "");
     if (status.step === 2) setDraft(await setupRequest<SecurityDraft>("security", {}, response.csrfToken));
     setToken("");
   });
   const next = () => run(async () => {
     if (step === 0) { await setupRequest("database", database(), csrf); setDbPassword(""); setStep(1); }
     else if (step === 1) {
-      await setupRequest("account", { email, displayName, password, confirmation }, csrf);
+      await setupRequest("account", { username, ...(displayName.trim() ? { displayName } : {}), password, confirmation }, csrf);
       setPassword(""); setConfirmation(""); setDraft(await setupRequest<SecurityDraft>("security", {}, csrf)); setStep(2);
     } else {
       const session = await setupRequest<LoginResult>("finish", { enableTotp, ...(enableTotp ? { code } : {}), recoverySaved: saved, origin: window.location.origin }, csrf);
@@ -82,12 +82,12 @@ export function OnboardingPage({ status, onComplete }: { status: SetupStatus; on
               {type === "postgresql" ? <TextField label={t("onboarding.dbName")} value={dbName} onChange={(event) => setDbName(event.target.value)} /> : <><TextField type="number" label={t("onboarding.dbNumber")} value={dbNumber} onChange={(event) => setDbNumber(Number(event.target.value))} /><TextField label={t("onboarding.namespace")} value={namespace} onChange={(event) => setNamespace(event.target.value)} /></>}
               <FormControlLabel control={<Switch checked={tls} onChange={(event) => setTls(event.target.checked)} />} label={t("onboarding.tls")} />
             </>}
-            {existing && <><Alert severity="info">{t("onboarding.existing")}</Alert><TextField label={t("onboarding.email")} value={email} onChange={(event) => setEmail(event.target.value)} /><TextField type="password" label={t("onboarding.password")} value={password} onChange={(event) => setPassword(event.target.value)} /><TextField label={t("onboarding.code")} value={code} onChange={(event) => setCode(event.target.value)} /><Button disabled={busy || !password} onClick={() => void run(async () => { const response = await setupRequest<LoginResult>("adopt", { database: database(), email, password, code }, csrf); onComplete(acceptLogin(response)); })}>{t("onboarding.adopt")}</Button></>}
+            {existing && <><Alert severity="info">{t("onboarding.existing")}</Alert><TextField label={t("onboarding.identifier")} value={identifier} onChange={(event) => setIdentifier(event.target.value)} /><TextField type="password" label={t("onboarding.password")} value={password} onChange={(event) => setPassword(event.target.value)} /><TextField label={t("onboarding.code")} value={code} onChange={(event) => setCode(event.target.value)} /><Button disabled={busy || !password} onClick={() => void run(async () => { const response = await setupRequest<LoginResult>("adopt", { database: database(), identifier, password, code }, csrf); onComplete(acceptLogin(response)); })}>{t("onboarding.adopt")}</Button></>}
             <Button variant="contained" disabled={busy || (type !== "sqlite" && !host)} onClick={() => void next()}>{t("onboarding.next")}</Button>
           </> : step === 1 ? <>
-            <TextField label={t("onboarding.email")} type="email" value={email} onChange={(event) => setEmail(event.target.value)} /><TextField label={t("onboarding.displayName")} value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
+            <TextField label={t("onboarding.accountName")} autoComplete="username" helperText={t("onboarding.accountNameHint")} value={username} onChange={(event) => setUsername(event.target.value)} /><TextField label={t("onboarding.displayName")} value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
             <TextField label={t("onboarding.password")} type="password" autoComplete="new-password" value={password} helperText={t("onboarding.passwordHint")} onChange={(event) => setPassword(event.target.value)} /><TextField label={t("onboarding.confirmPassword")} type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} />
-            <Button variant="contained" disabled={busy || !email || !displayName || password.length < 12 || password !== confirmation} onClick={() => void next()}>{t("onboarding.next")}</Button>
+            <Button variant="contained" disabled={busy || !username.trim() || password.length < 12 || password !== confirmation} onClick={() => void next()}>{t("onboarding.next")}</Button>
           </> : step === 2 && draft ? <>
             <SecurityInformation draft={{ recoveryKey: draft.recoveryKey, ...(enableTotp ? { backupCodes: draft.backupCodes } : {}) }} />
             <FormControlLabel control={<Switch checked={enableTotp} onChange={(event) => { setEnableTotp(event.target.checked); setSaved(false); }} />} label={t("onboarding.enableTotp")} />

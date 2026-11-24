@@ -15,7 +15,7 @@ export const AllowPasswordChangeRequired = () =>
 
 export interface Principal {
   id: string;
-  email: string;
+  email: string | null;
   displayName: string;
   avatarUrl: string | null;
   permissions: Permission[];
@@ -45,7 +45,7 @@ export class AuthService {
   principal(
     user: {
       id: string;
-      email: string;
+      email: string | null;
       displayName: string;
       avatarKey: string | null;
       forcePasswordChange: boolean;

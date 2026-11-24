@@ -40,7 +40,7 @@ export function newBackupCodes() {
   return { codes, hashes: codes.map(digest) };
 }
 export interface Identity {
-  id: string; email: string; displayName: string; avatarUrl: string | null;
+  id: string; email: string | null; username: string | null; emailVerified: boolean; displayName: string; avatarUrl: string | null;
   permissions: string[]; authentication: "session" | "token"; forcePasswordChange: boolean;
   securitySetupRequired: boolean;
 }
@@ -48,15 +48,18 @@ export async function identity(store: Store | UnitOfWork, user: EntityRow<"User"
   const links = await store.list("UserRole", { filters: [{ field: "userId", op: "eq", value: user.id }] });
   const granted = new Set<string>();
   for (const link of links) for (const permission of (await store.get("Role", link.roleId))?.permissions ?? []) granted.add(permission);
-  return { id: user.id, email: user.email, displayName: user.displayName, avatarUrl: user.avatarKey ? `/api/v1/auth/me/avatar?v=${encodeURIComponent(user.avatarKey)}` : null,
+  return { id: user.id, email: user.email, username: user.username, emailVerified: user.emailVerified, displayName: user.displayName, avatarUrl: user.avatarKey ? `/api/v1/auth/me/avatar?v=${encodeURIComponent(user.avatarKey)}` : null,
     permissions: authentication === "token" ? (scopes ?? []).filter((scope) => granted.has(scope)) : [...granted],
     authentication, forcePasswordChange: user.forcePasswordChange, securitySetupRequired: !(await store.get("AccountSecurity", user.id))?.recoveryHash };
 }
-export async function issueSession(store: Store, userId: string) {
+export async function issueSession(store: Store, userId: string, expectedPasswordHash?: string) {
   const raw = randomBytes(32).toString("base64url"); const csrf = randomBytes(24).toString("base64url");
-  const user = await store.get("User", userId);
-  if (!user || user.disabledAt) throw new Error("AUTH_INVALID");
-  await store.transaction((tx) => tx.put("Session", { idHash: digest(raw), userId, csrfHash: digest(csrf), expiresAt: new Date(Date.now() + 8 * 3600000).toISOString() }));
+  const user = await store.transaction(async (tx) => {
+    const user = await tx.get("User", userId);
+    if (!user || user.disabledAt || (expectedPasswordHash && user.passwordHash !== expectedPasswordHash)) throw new Error("AUTH_INVALID");
+    await tx.put("Session", { idHash: digest(raw), userId, csrfHash: digest(csrf), expiresAt: new Date(Date.now() + 8 * 3600000).toISOString() });
+    return user;
+  });
   return { raw, csrfToken: csrf, user: await identity(store, user) };
 }
 export async function verifySecondFactor(tx: UnitOfWork, userId: string, code: string, key: Buffer) {

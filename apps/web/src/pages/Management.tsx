@@ -1395,7 +1395,7 @@ function UserDialog({
 }) {
   const client = useQueryClient();
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [roleIds, setRoleIds] = useState<string[]>([]);
   const [locale, setLocale] = useState<"zh-CN" | "en-US">("zh-CN");
@@ -1404,7 +1404,7 @@ function UserDialog({
   useEffect(() => {
     if (!open) return;
     setName(user?.displayName ?? "");
-    setEmail(user?.email ?? "");
+    setUsername(user?.username ?? "");
     setPassword("");
     setRoleIds(user?.roles.map(({ role }) => role.id) ?? []);
     setLocale(user?.locale ?? "zh-CN");
@@ -1422,7 +1422,7 @@ function UserDialog({
             disabled,
             roleIds,
           })
-        : api.createUser({ email, displayName: name, password, roleIds }),
+        : api.createUser({ username, displayName: name, password, roleIds }),
     onSuccess: async () => {
       await client.invalidateQueries({ queryKey: ["users"] });
       onClose();
@@ -1446,10 +1446,9 @@ function UserDialog({
           {!user && (
             <>
               <TextField
-                type="email"
-                label="邮箱"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                label="账号名称"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
               />
               <TextField
                 type="password"
@@ -1520,7 +1519,7 @@ function UserDialog({
           variant="contained"
           disabled={
             !name ||
-            (!user && (!email || password.length < 12)) ||
+            (!user && (!username.trim() || password.length < 12)) ||
             mutation.isPending
           }
           onClick={() => mutation.mutate()}
@@ -1702,7 +1701,7 @@ export function AccessPage() {
                       <Typography fontWeight={700}>
                         {user.displayName}
                       </Typography>
-                      <Typography variant="caption">{user.email}</Typography>
+                      <Typography variant="caption">{user.username ?? user.email}</Typography>
                     </TableCell>
                     <TableCell>
                       {user.roles.map(({ role }) => (

@@ -1,5 +1,5 @@
 import { Alert, Box, Button, Skeleton, Stack, Typography } from "@mui/material";
-import { HistoryOutlined, SettingsOutlined, ShieldOutlined } from "@mui/icons-material";
+import { HistoryOutlined, MailOutline, SettingsOutlined, ShieldOutlined } from "@mui/icons-material";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Link, Navigate, Outlet, useLocation } from "react-router-dom";
@@ -8,6 +8,7 @@ import { api } from "../api";
 const sections = [
   { path: "general", icon: SettingsOutlined, permission: "settings:manage" },
   { path: "backups", icon: HistoryOutlined, permission: "backup:manage" },
+  { path: "mail", icon: MailOutline, permission: "settings:manage" },
   { path: "security", icon: ShieldOutlined, permission: null },
 ] as const;
 
@@ -21,7 +22,7 @@ export function SettingsLayout() {
   const user = me.data.user;
   const available = sections.filter((section) =>
     section.permission === null ||
-    ((section.path !== "backups" || user.authentication === "session") &&
+    ((!["backups", "mail"].includes(section.path) || user.authentication === "session") &&
       (user.permissions.includes(section.permission) || user.permissions.includes("*"))),
   );
   const current = location.pathname.split("/")[2];
@@ -34,7 +35,7 @@ export function SettingsLayout() {
     <Box
       component="nav"
       aria-label={t("settingsNavigation.label")}
-      sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: `repeat(${available.length}, minmax(0, 1fr))` }, gap: 1, mt: 1, mb: 3 }}
+      sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: `repeat(${available.length}, minmax(0, 1fr))` }, gap: 1, mt: 1, mb: 3 }}
     >
       {available.map(({ path, icon: Icon }) => <Button
         key={path}

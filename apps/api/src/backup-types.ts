@@ -1,3 +1,5 @@
+import type { BackupGroup } from "@netsentinel/contracts";
+
 export type BackupSource = "manual" | "scheduled" | "import" | "protection";
 export type BackupStatus = "running" | "ready" | "failed";
 export interface BackupEntry {
@@ -11,6 +13,7 @@ export interface BackupEntry {
   formatVersion: number;
   schemaFingerprint?: string;
   counts?: Record<string, number>;
+  groups?: BackupGroup[];
   dataTime?: string;
   error?: string;
   // Wrapped with this instance's master key, never included in API responses.
@@ -23,6 +26,7 @@ export interface BackupPolicy {
   weekday: number;
   timezone: string;
   retain: number;
+  groups?: BackupGroup[];
   password?: unknown;
   lastSlot?: string;
 }
@@ -31,6 +35,7 @@ export interface BackupJob {
   type: "create" | "import" | "restore";
   status: "running" | "succeeded" | "failed";
   phase: string;
+  sessionReset?: boolean;
   backupId?: string;
   createdAt: string;
   finishedAt?: string;

@@ -203,7 +203,7 @@ export const workflowStepInputSchema = z.discriminatedUnion("type", [
   z.object({ ...commonStepShape, type: z.literal("SSH"), credentialId: z.string().min(1), config: z.object({ host: z.string().trim().min(1), port: z.number().int().min(1).max(65_535).default(22), username: z.string().trim().min(1), command: z.string().min(1) }) }),
   z.object({ ...commonStepShape, type: z.literal("SHELL"), config: z.object({ command: z.string().min(1) }) }),
   z.object({ ...commonStepShape, type: z.literal("AGENT_SHELL"), config: z.object({ agentId: z.string().min(1), command: z.string().min(1) }) }),
-  z.object({ ...commonStepShape, type: z.literal("EMAIL"), credentialId: z.string().min(1), config: z.object({ to: z.string().trim().min(1), subject: z.string().min(1), body: z.string() }) }),
+  z.object({ ...commonStepShape, type: z.literal("EMAIL"), config: z.object({ transport: z.enum(["system", "credential"]).optional(), to: z.string().trim().min(1), subject: z.string().min(1), body: z.string() }) }).refine(({ credentialId, config }) => config.transport === "system" ? !credentialId : Boolean(credentialId), { path: ["credentialId"], message: "Select a valid SMTP transport and credential" }),
 ]);
 export type WorkflowStepInput = z.infer<typeof workflowStepInputSchema>;
 
@@ -238,3 +238,6 @@ export const credentialInputSchema = z.discriminatedUnion("type", [
   z.object({ name: z.string().trim().min(1).max(120), type: z.literal("SMTP"), host: z.string().trim().min(1), port: z.number().int().min(1).max(65_535), secure: z.boolean(), user: z.string().min(1), password: z.string().min(1), from: z.string().email() }),
 ]);
 export type CredentialInput = z.infer<typeof credentialInputSchema>;
+
+export const BACKUP_GROUPS = ["accounts", "settings", "operations", "audit"] as const;
+export type BackupGroup = typeof BACKUP_GROUPS[number];

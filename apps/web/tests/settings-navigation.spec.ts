@@ -1,17 +1,19 @@
 import { expect, test } from "@playwright/test";
 import { login } from "./auth";
 
-test("settings groups general, backups and account security with compatible deep links", async ({ page }, testInfo) => {
+test("settings groups general, backups, mail and account security with compatible deep links", async ({ page }, testInfo) => {
   await login(page);
   await page.goto("/settings");
   await expect(page).toHaveURL(/\/settings\/general$/);
   await expect(page.getByRole("heading", { name: "常规设置", exact: true })).toBeVisible();
   const navigation = page.getByRole("navigation", { name: "系统设置子页面" });
-  await expect(navigation.getByRole("link")).toHaveCount(3);
+  await expect(navigation.getByRole("link")).toHaveCount(4);
   await expect(navigation.getByRole("link", { name: /常规设置/ })).toHaveAttribute("aria-current", "page");
   await navigation.getByRole("link", { name: /备份与恢复/ }).click();
   await expect(page).toHaveURL(/\/settings\/backups$/);
   await expect(page.getByRole("heading", { name: "备份与恢复", exact: true })).toBeVisible();
+  await navigation.getByRole("link", { name: /邮件服务/ }).click();
+  await expect(page.getByRole("heading", { name: "邮件服务", exact: true })).toBeVisible();
   await navigation.getByRole("link", { name: /账户安全/ }).focus();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/settings\/security$/);
@@ -42,7 +44,7 @@ test("personal security remains available without system or backup permissions",
   } }));
   const adminRequests: string[] = [];
   page.on("request", (request) => {
-    if (/\/api\/v1\/(?:settings|admin\/backups)/.test(request.url())) adminRequests.push(request.url());
+    if (/\/api\/v1\/(?:settings|admin\/(?:backups|mail))/.test(request.url())) adminRequests.push(request.url());
   });
   await page.goto("/settings");
   await expect(page).toHaveURL(/\/settings\/security$/);
@@ -50,6 +52,8 @@ test("personal security remains available without system or backup permissions",
   await expect(navigation.getByRole("link")).toHaveCount(1);
   await expect(page.getByRole("heading", { name: "账户安全", exact: true })).toBeVisible();
   await page.goto("/settings/backups");
+  await expect(page.getByText("你没有访问此设置页面的权限，请选择其他设置。")).toBeVisible();
+  await page.goto("/settings/mail");
   await expect(page.getByText("你没有访问此设置页面的权限，请选择其他设置。")).toBeVisible();
   await page.goto("/settings/general");
   await expect(page.getByText("你没有访问此设置页面的权限，请选择其他设置。")).toBeVisible();

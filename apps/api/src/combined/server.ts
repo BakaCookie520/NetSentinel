@@ -15,6 +15,7 @@ import { serveWebConsole } from "../web-console.js";
 import { ZodError } from "zod";
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
+import { migrateAccountNames } from "./account-name.js";
 
 export async function createCombinedApplication() {
   const config = new InstallationConfig(); await config.acquire();
@@ -23,6 +24,7 @@ export async function createCombinedApplication() {
   let agents: ReturnType<typeof attachCombinedAgents>;
   const state: ApplicationState = { config, async activate(store) {
     if (state.runtime) throw new Error("INSTANCE_ALREADY_ACTIVE");
+    await migrateAccountNames(store);
     const runtime = new CombinedRuntime(store, config.key);
     await runtime.start();
     state.runtime = runtime; state.store = store; agents?.bind();
@@ -47,6 +49,7 @@ export async function createCombinedApplication() {
     next();
   });
   app.use(["/api/v1/setup/unlock", "/api/v1/setup/database", "/api/v1/setup/account", "/api/v1/setup/security", "/api/v1/setup/finish", "/api/v1/setup/adopt", "/api/v1/auth/login", "/api/v1/auth/two-factor", "/api/v1/auth/recover"], rateLimit({ windowMs: 15 * 60000, limit: 50, standardHeaders: "draft-8", legacyHeaders: false }));
+  app.use(["/api/v1/auth/recover/email", "/api/v1/auth/me/email", "/api/v1/admin/mail/test"], rateLimit({ windowMs: 15 * 60000, limit: 30, standardHeaders: "draft-8", legacyHeaders: false }));
   let writes = 0;
   app.use("/api/v1", (request, response, next) => {
     if (!["GET", "HEAD", "OPTIONS"].includes(request.method) && !/^\/(?:setup\/|admin\/backups)/u.test(request.path)) {
@@ -76,7 +79,7 @@ export async function createCombinedApplication() {
     components: { securitySchemes: { session: { type: "apiKey", in: "cookie", name: "netsentinel_session" } } },
     paths: Object.fromEntries([
       ["setup/status", "get"], ["setup/unlock", "post"], ["setup/database", "post"], ["setup/account", "post"], ["setup/security", "post"], ["setup/finish", "post"],
-      ["auth/login", "post"], ["auth/two-factor", "post"], ["auth/recover", "post"], ["auth/recover/confirm", "post"], ["auth/me", "get"], ["auth/me/security", "get"], ["health/ready", "get"],
+      ["auth/login", "post"], ["auth/two-factor", "post"], ["auth/recover", "post"], ["auth/recover/confirm", "post"], ["auth/me", "get"], ["auth/me/security", "get"], ["auth/me/email", "get"], ["auth/recover/email/request", "post"], ["auth/recover/email/confirm", "post"], ["admin/mail", "get"], ["admin/mail/test", "post"], ["health/ready", "get"],
       ["monitors", "get"], ["workflows", "get"], ["credentials", "get"], ["incidents", "get"], ["agents", "get"], ["admin/backups", "get"],
     ].map(([path, method]) => [`/api/v1/${path}`, { [method!]: { responses: { "200": { description: "Success" }, "400": { description: "Invalid input" }, "401": { description: "Authentication required" } } } }])),
   }));

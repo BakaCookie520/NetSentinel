@@ -3,7 +3,9 @@ import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { digest, passwordHash, passwordMatches, issueSession, identity, verifySecondFactor, totpSecret, newRecovery, newBackupCodes, encryptTotp, verifyTotp, type Identity } from "./security.js";
 import { cookie, type ApplicationState } from "./setup.js";
+import { accountMail } from "./account-mail.js";
 import QRCode from "qrcode";
+import { findAccount, hasIdentifier, loginFields } from "./account-name.js";
 
 export type UserRequest = Request & { principal: Identity; sessionHash?: string };
 export const requirePermission = (permission: string) => (request: Request, _response: Response, next: NextFunction) => {
@@ -11,10 +13,10 @@ export const requirePermission = (permission: string) => (request: Request, _res
   next();
 };
 export function mountAuth(app: Express, state: ApplicationState) {
-  const challenges = new Map<string, { userId: string; expires: number; tries: number }>();
+  const challenges = new Map<string, { userId: string; passwordHash: string; expires: number; tries: number }>();
   const inFlightChallenges = new Set<string>();
   const enrollments = new Map<string, { secret: string; expires: number }>();
-  const recoveries = new Map<string, { userId: string; newHash: string; previousHash: string; recovery: ReturnType<typeof newRecovery>; expires: number }>();
+  const recoveries = new Map<string, { userId: string; newHash: string; previousHash: string; previousPasswordHash: string; recovery: ReturnType<typeof newRecovery>; expires: number }>();
   app.use("/api/v1/auth", (_request, _response, next) => {
     const now = Date.now();
     for (const [key, value] of challenges) if (value.expires < now) challenges.delete(key);
@@ -31,16 +33,15 @@ export function mountAuth(app: Express, state: ApplicationState) {
     return user;
   };
   app.post("/api/v1/auth/login", async (request, response) => {
-    const input = z.object({ email: z.string().email(), password: z.string().min(1).max(1024) }).parse(request.body);
-    const users = await store().list("User", { filters: [{ field: "email", op: "eq", value: input.email.toLowerCase() }], limit: 1 });
-    const user = users[0];
+    const input = z.object({ ...loginFields, password: z.string().min(1).max(1024) }).refine(hasIdentifier).parse(request.body);
+    const user = await findAccount(store(), input);
     if (!user || user.disabledAt || !await passwordMatches(user.passwordHash, input.password)) throw new Error("AUTH_INVALID");
     if ((await store().get("AccountSecurity", user.id))?.totpEncrypted) {
       const challengeId = randomBytes(32).toString("base64url");
-      challenges.set(digest(challengeId), { userId: user.id, expires: Date.now() + 300000, tries: 0 });
+      challenges.set(digest(challengeId), { userId: user.id, passwordHash: user.passwordHash, expires: Date.now() + 300000, tries: 0 });
       response.json({ requiresTwoFactor: true, challengeId }); return;
     }
-    const session = await issueSession(store(), user.id); cookie(response, session.raw);
+    const session = await issueSession(store(), user.id, user.passwordHash); cookie(response, session.raw);
     response.json({ user: session.user, csrfToken: session.csrfToken });
   });
   app.post("/api/v1/auth/two-factor", async (request, response) => {
@@ -50,20 +51,24 @@ export function mountAuth(app: Express, state: ApplicationState) {
     if (!challenge || inFlightChallenges.has(challengeKey) || challenge.expires < Date.now() || ++challenge.tries > 5) throw new Error("AUTH_INVALID");
     inFlightChallenges.add(challengeKey);
     try {
-      await store().transaction((tx) => verifySecondFactor(tx, challenge.userId, input.code, state.config.key));
+      await store().transaction(async (tx) => {
+        const user = await tx.get("User", challenge.userId);
+        if (!user || user.disabledAt || user.passwordHash !== challenge.passwordHash) throw new Error("AUTH_INVALID");
+        await verifySecondFactor(tx, challenge.userId, input.code, state.config.key);
+      });
       challenges.delete(challengeKey);
     } finally { inFlightChallenges.delete(challengeKey); }
-    const session = await issueSession(store(), challenge.userId); cookie(response, session.raw);
+    const session = await issueSession(store(), challenge.userId, challenge.passwordHash); cookie(response, session.raw);
     response.json({ user: session.user, csrfToken: session.csrfToken });
   });
   app.post("/api/v1/auth/recover", async (request, response) => {
-    const input = z.object({ email: z.string().email(), recoveryKey: z.string().min(20).max(256), password: z.string().min(12).max(1024), confirmation: z.string() }).parse(request.body);
+    const input = z.object({ ...loginFields, recoveryKey: z.string().min(20).max(256), password: z.string().min(12).max(1024), confirmation: z.string() }).refine(hasIdentifier).parse(request.body);
     if (input.password !== input.confirmation) throw new Error("PASSWORD_MISMATCH");
-    const user = (await store().list("User", { filters: [{ field: "email", op: "eq", value: input.email.toLowerCase() }], limit: 1 }))[0];
+    const user = await findAccount(store(), input);
     const security = user ? await store().get("AccountSecurity", user.id) : null;
     if (!user || user.disabledAt || !security?.recoveryHash || security.recoveryHash !== digest(input.recoveryKey)) throw new Error("AUTH_INVALID");
     const token = randomBytes(32).toString("base64url"); const recovery = newRecovery();
-    recoveries.set(digest(token), { userId: user.id, newHash: await passwordHash(input.password), previousHash: security.recoveryHash, recovery, expires: Date.now() + 300000 });
+    recoveries.set(digest(token), { userId: user.id, newHash: await passwordHash(input.password), previousHash: security.recoveryHash, previousPasswordHash: user.passwordHash, recovery, expires: Date.now() + 300000 });
     response.json({ recoveryToken: token, recoveryKey: recovery.key });
   });
   app.post("/api/v1/auth/recover/confirm", async (request, response) => {
@@ -72,7 +77,7 @@ export function mountAuth(app: Express, state: ApplicationState) {
     if (!pending || pending.expires < Date.now()) throw new Error("AUTH_INVALID");
     await store().transaction(async (tx) => {
       const security = await tx.get("AccountSecurity", pending.userId); const user = await tx.get("User", pending.userId);
-      if (!security || !user || user.disabledAt || security.recoveryHash !== pending.previousHash) throw new Error("AUTH_INVALID");
+      if (!security || !user || user.disabledAt || security.recoveryHash !== pending.previousHash || user.passwordHash !== pending.previousPasswordHash) throw new Error("AUTH_INVALID");
       await tx.put("User", { ...user, passwordHash: pending.newHash, forcePasswordChange: false }, user.version);
       await tx.put("AccountSecurity", { ...security, recoveryHash: pending.recovery.hash, backupHashes: [], totpEncrypted: null, totpLastCounter: -1 }, security.version);
       for (const session of await tx.list("Session", { filters: [{ field: "userId", op: "eq", value: user.id }] })) await tx.remove("Session", session.idHash);
@@ -81,6 +86,7 @@ export function mountAuth(app: Express, state: ApplicationState) {
     });
     recoveries.delete(digest(input.recoveryToken)); response.json({ ok: true });
   });
+  const mail = accountMail(app, state); mail.publicRoutes();
   app.use("/api/v1", async (request, response, next) => {
     if (/^\/(?:health\/|setup\/|public\/status|metrics$)/u.test(request.path)) { next(); return; }
     try {
@@ -106,6 +112,7 @@ export function mountAuth(app: Express, state: ApplicationState) {
       next();
     } catch (error) { next(error); }
   });
+  mail.privateRoutes();
   app.get("/api/v1/auth/me", (request, response) => response.json({ user: (request as UserRequest).principal }));
   app.post("/api/v1/auth/logout", async (request, response) => {
     const id = (request as UserRequest).sessionHash;
@@ -132,7 +139,7 @@ export function mountAuth(app: Express, state: ApplicationState) {
     const security = await store().get("AccountSecurity", user.id);
     if (security?.totpEncrypted) throw new Error("AUTH_2FA_ALREADY_ENABLED");
     const secret = totpSecret(); enrollments.set((request as UserRequest).sessionHash!, { secret, expires: Date.now() + 300000 });
-    const otpauth = `otpauth://totp/${encodeURIComponent(`NetSentinel:${user.email}`)}?secret=${secret}&issuer=NetSentinel`;
+    const otpauth = `otpauth://totp/${encodeURIComponent(`NetSentinel:${user.username ?? user.email}`)}?secret=${secret}&issuer=NetSentinel`;
     response.json({ secret, otpauth, qrCode: await QRCode.toDataURL(otpauth) });
   });
   app.post("/api/v1/auth/me/security/confirm", async (request, response) => {

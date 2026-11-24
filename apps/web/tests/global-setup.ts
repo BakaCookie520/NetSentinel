@@ -10,7 +10,7 @@ export default async function globalSetup(config: FullConfig) {
   const password = process.env.E2E_REAL_PASSWORD ?? "IntegrationPass123!";
   const context = await request.newContext({ baseURL });
   const response = await context.post("/api/v1/auth/login", {
-    data: { email: "admin@netsentinel.local", password },
+    data: { identifier: "admin", password },
   });
   if (!response.ok()) {
     throw new Error(
@@ -21,7 +21,7 @@ export default async function globalSetup(config: FullConfig) {
     csrfToken: string;
     user: {
       id: string;
-      email: string;
+      email: string | null;
       displayName: string;
       permissions: string[];
     };

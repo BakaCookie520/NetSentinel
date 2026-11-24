@@ -1,3 +1,5 @@
+import { checkServerIdentity } from "node:tls";
+import { isIP } from "node:net";
 import { spawn } from "node:child_process";
 import { Client } from "ssh2";
 import nodemailer from "nodemailer";
@@ -12,6 +14,7 @@ export type { HttpCredentialType, WebSocketCredentialType };
 export interface ExecutionResult { status: "SUCCEEDED" | "FAILED" | "UNKNOWN"; output?: string; error?: string }
 export interface ExecutionDependencies {
   authorize(host: string): Promise<AuthorizedTarget | null>;
+  systemSmtp?(): Promise<SmtpOptions | null>;
   agent(id: string, command: string, timeout: number): Promise<ExecutionResult>;
 }
 const cap = (text: string) => text.slice(-65536);
@@ -26,6 +29,20 @@ async function commandProcess(command: string, timeout: number): Promise<Executi
     child.once("error", () => finish({ status: "FAILED", error: "Command could not start" }));
     child.once("close", (code) => finish(code === 0 ? { status: "SUCCEEDED", output } : { status: "FAILED", error: `Command exited ${code}`, output }));
   });
+}
+export interface SmtpOptions { host: string; port: number; secure: boolean; requireTLS?: boolean; user: string; password: string; from: string }
+export async function sendSmtp(smtp: SmtpOptions, message: { to: string; subject: string; text: string }, authorize: ExecutionDependencies["authorize"], timeout: number) {
+  const target = await authorize(smtp.host);
+  if (!target) throw new Error("EGRESS_BLOCKED");
+  const transport = nodemailer.createTransport({ host: target.address, port: smtp.port, secure: smtp.secure, requireTLS: smtp.requireTLS,
+    tls: { servername: isIP(smtp.host) ? undefined : smtp.host, checkServerIdentity: (_host, cert) => checkServerIdentity(smtp.host, cert) },
+    connectionTimeout: timeout, greetingTimeout: timeout, socketTimeout: timeout,
+    ...(smtp.user ? { auth: { user: smtp.user, pass: smtp.password } } : {}) });
+  try {
+    const result = await transport.sendMail({ from: smtp.from, ...message, disableFileAccess: true, disableUrlAccess: true });
+    if (!result.accepted.length || result.rejected.length) throw new Error("SMTP_DELIVERY_FAILED");
+  } catch { throw new Error("SMTP_DELIVERY_FAILED"); }
+  finally { transport.close(); }
 }
 export async function executeAction(
   input: { name: string; type: string; config: unknown; timeoutMs: number; retries: number; continueOnFailure: boolean; credentialId: string | null },
@@ -89,12 +106,10 @@ export async function executeAction(
         }
       } finally { clearTimeout(timer); }
     } else {
-      if (credential?.type !== "SMTP") throw new Error("CONFIG_INVALID");
-      const smtp = JSON.parse(secret) as { host: string; port: number; secure: boolean; user: string; password: string; from: string };
-      const target = await dependencies.authorize(smtp.host); if (!target) return { status: "FAILED", error: "EGRESS_BLOCKED" };
-      const transport = nodemailer.createTransport({ host: target.address, port: smtp.port, secure: smtp.secure, tls: { servername: smtp.host }, connectionTimeout: step.timeoutMs, socketTimeout: step.timeoutMs, auth: { user: smtp.user, pass: smtp.password } });
-      try { await transport.sendMail({ from: smtp.from, to: String(config.to), subject: String(config.subject), text: String(config.body) }); result = { status: "SUCCEEDED", output: "Email accepted" }; }
-      finally { transport.close(); }
+      const smtp = config.transport === "system" ? await dependencies.systemSmtp?.() : credential?.type === "SMTP" ? JSON.parse(secret) as SmtpOptions : null;
+      if (!smtp) return { status: "FAILED", error: config.transport === "system" ? "MAIL_DISABLED" : "CONFIG_INVALID" };
+      try { await sendSmtp(smtp, { to: String(config.to), subject: String(config.subject), text: String(config.body) }, dependencies.authorize, step.timeoutMs); result = { status: "SUCCEEDED", output: "Email accepted" }; }
+      catch (error) { result = { status: "FAILED", error: error instanceof Error && error.message === "EGRESS_BLOCKED" ? "EGRESS_BLOCKED" : "SMTP_DELIVERY_FAILED" }; }
     }
   } catch { result = { status: "UNKNOWN", error: "Action failed; remote result may be uncertain" }; }
   return { ...result, ...(result.output ? { output: secret ? result.output.replaceAll(secret, "[REDACTED]") : result.output } : {}), ...(result.error ? { error: secret ? result.error.replaceAll(secret, "[REDACTED]") : result.error } : {}) };

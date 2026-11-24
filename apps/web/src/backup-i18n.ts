@@ -1,7 +1,7 @@
 import i18n from "./i18n";
 
 i18n.addResourceBundle("zh-CN", "translation", { nav: { backups: "备份与恢复" }, backup: {
-  title: "备份与恢复", subtitle: "加密保存完整站点，随时导出并安全迁移。", create: "立即备份", import: "导入备份", policy: "备份策略", history: "备份记录",
+  title: "备份与恢复", subtitle: "按分组加密备份，随时导出并安全迁移。", create: "立即备份", import: "导入备份", policy: "备份策略", history: "备份记录",
   warning: "本机备份不能抵御服务器或磁盘丢失。请定期导出到异地并妥善保管独立备份口令；口令遗失后无法恢复。",
   setup: "先设置独立备份口令，即可创建手动或定时备份。", password: "独立备份口令", passwordConfirm: "再次输入备份口令", passwordHint: "至少 12 位。更改仅影响后续备份，旧备份仍需原口令。", passwordMismatch: "两次备份口令不一致，或长度不足 12 位。",
   automatic: "启用定时备份", daily: "每天", weekly: "每周", frequency: "执行频率", time: "执行时间", timezone: "时区", weekday: "星期", retain: "保留份数", retainHint: "仅清理成功的定时备份，手动、导入和恢复前备份不自动删除。",
@@ -14,7 +14,7 @@ i18n.addResourceBundle("zh-CN", "translation", { nav: { backups: "备份与恢�
   errors: { BACKUP_BUSY: "另一个备份操作正在执行，请稍后重试。", BACKUP_PASSWORD_REQUIRED: "请先设置独立备份口令。", BACKUP_PASSWORD_OR_FILE_INVALID: "备份口令错误，或文件已损坏。", BACKUP_SCHEMA_MISMATCH: "备份数据库结构不匹配，请使用与来源一致的应用版本。", BACKUP_DISK_FULL: "可用磁盘空间不足，操作已停止。", BACKUP_DRAIN_TIMEOUT: "运行中的任务未及时结束，恢复已中止。", BACKUP_WORKER_UPGRADE_REQUIRED: "请先升级所有 Worker 后再恢复。", BACKUP_CURRENT_PASSWORD_INVALID: "当前账户密码不正确。", BACKUP_OPERATION_FAILED: "备份操作失败，请检查服务日志后重试。", BACKUP_INTERRUPTED: "操作因应用重启中断，请重试。", BACKUP_ADMIN_MISSING: "备份缺少可用的管理员账户。", BACKUP_FILE_INVALID: "文件不是有效的 NetSentinel 备份。", BACKUP_EXPANDED_LIMIT: "备份展开后超过容量上限。" },
 } }, true, true);
 i18n.addResourceBundle("en-US", "translation", { nav: { backups: "Backups & recovery" }, backup: {
-  title: "Backups & recovery", subtitle: "Encrypted recovery points for your entire instance.", create: "Back up now", import: "Import backup", policy: "Backup policy", history: "Recovery points",
+  title: "Backups & recovery", subtitle: "Encrypted recovery points for selected parts of your instance.", create: "Back up now", import: "Import backup", policy: "Backup policy", history: "Recovery points",
   warning: "Local backups cannot protect against server or disk loss. Export copies off-site and keep the independent passphrase safe. Lost passphrases cannot be recovered.",
   setup: "Set an independent passphrase to enable manual and scheduled backups.", password: "Backup passphrase", passwordConfirm: "Confirm passphrase", passwordHint: "At least 12 characters. Changes apply only to new backups; older files still need their original passphrase.", passwordMismatch: "Passphrases must match and contain at least 12 characters.",
   automatic: "Scheduled backups", daily: "Daily", weekly: "Weekly", frequency: "Frequency", time: "Run at", timezone: "Time zone", weekday: "Weekday", retain: "Copies to retain", retainHint: "Only successful scheduled backups are pruned. Manual, imported and pre-restore copies are kept.",
@@ -25,4 +25,17 @@ i18n.addResourceBundle("en-US", "translation", { nav: { backups: "Backups & reco
   details: "Backup details", records: "Records", preview: "Import validated. Review the backup before deciding whether to restore it.", currentPassword: "Current account password", downloadHint: "Confirm your current password to export an encrypted backup containing accounts, credentials and history.",
   restoreWarning: "This replaces the current site and briefly pauses monitoring and tasks. A protection backup is created first. All sessions will expire; sign in using an account from the backup. If the old instance remains online, switch traffic and Agents separately.", confirmation: "Type RESTORE to confirm", deleteWarning: "This permanently deletes the backup file from the server. This cannot be undone.", working: "Processing", complete: "Operation completed", failed: "Operation failed", reconnect: "Restore is committing. You will need to sign in again…", relogin: "Site restored. Sign in using an account from the backup.", creating: "Creating encrypted backup…", importing: "Uploading and validating backup…", restoring: "Restoring safely. Keep the application service running…", noNote: "No note",
   errors: { BACKUP_BUSY: "Another backup operation is running. Try again later.", BACKUP_PASSWORD_REQUIRED: "Set a backup passphrase first.", BACKUP_PASSWORD_OR_FILE_INVALID: "The passphrase is incorrect or the file is damaged.", BACKUP_SCHEMA_MISMATCH: "Database schemas do not match. Use the same application version as the source.", BACKUP_DISK_FULL: "Not enough disk space. The operation was stopped.", BACKUP_DRAIN_TIMEOUT: "Active tasks did not finish in time. Restore was aborted.", BACKUP_WORKER_UPGRADE_REQUIRED: "Upgrade all Workers before restoring.", BACKUP_CURRENT_PASSWORD_INVALID: "Your current account password is incorrect.", BACKUP_OPERATION_FAILED: "Backup operation failed. Check service logs before retrying.", BACKUP_INTERRUPTED: "An application restart interrupted this operation. Try again.", BACKUP_ADMIN_MISSING: "The backup has no usable administrator account.", BACKUP_FILE_INVALID: "This is not a valid NetSentinel backup.", BACKUP_EXPANDED_LIMIT: "Expanded backup exceeds the size limit." },
+} }, true, true);
+
+i18n.addResourceBundle("zh-CN", "translation", { backup: {
+  groupsLabel: "数据范围", groups: { accounts: "账户与权限", settings: "系统设置", operations: "探测与工作流数据", audit: "审计日志" },
+  groupHints: { accounts: "账号、角色、令牌、账户安全与头像", settings: "站点设置、出站策略与邮件服务", operations: "监控、凭据、Agent、工作流与运行历史", audit: "操作审计事件" },
+  restoreSelection: "只替换所选分组，短暂停止监控和任务。恢复前会先创建完整保护备份。",
+  restoreAccounts: "只替换所选分组，短暂停止监控和任务。恢复前会创建完整保护备份。由于选择了账户与权限，请在恢复后使用备份中的账户重新登录。",
+} }, true, true);
+i18n.addResourceBundle("en-US", "translation", { backup: {
+  groupsLabel: "Data to include", groups: { accounts: "Accounts and access", settings: "System settings", operations: "Monitoring and workflows", audit: "Audit logs" },
+  groupHints: { accounts: "Users, roles, tokens, account security and avatars", settings: "Site settings, egress rules and mail service", operations: "Monitors, credentials, agents, workflows and run history", audit: "Audit events" },
+  restoreSelection: "Only the selected groups are replaced. Monitoring and jobs pause briefly. A full protection backup is created first.",
+  restoreAccounts: "Only the selected groups are replaced. A full protection backup is created first. Because accounts are selected, sign in with an account from the backup afterward.",
 } }, true, true);

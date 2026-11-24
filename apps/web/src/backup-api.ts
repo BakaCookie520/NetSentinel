@@ -1,3 +1,4 @@
+import type { BackupGroup } from "@netsentinel/contracts";
 import { ApiError, request, requestMultipart } from "./api";
 
 export interface BackupEntry {
@@ -5,24 +6,26 @@ export interface BackupEntry {
   source: "manual" | "scheduled" | "import" | "protection";
   createdAt: string; status: "running" | "ready" | "failed";
   size: number; formatVersion: number; schemaFingerprint?: string;
+  groups?: BackupGroup[];
   counts?: Record<string, number>; dataTime?: string; error?: string;
 }
 export interface BackupPolicy {
   enabled: boolean; frequency: "daily" | "weekly"; time: string;
   weekday: number; timezone: string; retain: number; passwordConfigured: boolean;
   uploadMaxBytes: number;
+  groups: BackupGroup[];
 }
 export interface BackupJob {
   id: string; type: "create" | "import" | "restore";
   status: "running" | "succeeded" | "failed"; phase: string;
-  backupId?: string; error?: string;
+  backupId?: string; error?: string; sessionReset?: boolean;
 }
 const json = (method: string, body: unknown) => ({ method, body: JSON.stringify(body) });
 export const backups = {
   list: () => request<BackupEntry[]>("/admin/backups"),
   policy: () => request<BackupPolicy>("/admin/backups/policy"),
   savePolicy: (policy: Omit<BackupPolicy, "passwordConfigured" | "uploadMaxBytes"> & { password?: string }) => request<BackupPolicy>("/admin/backups/policy", json("PUT", policy)),
-  create: (name: string, note: string) => request<BackupJob>("/admin/backups", json("POST", { name, note })),
+  create: (name: string, note: string, groups: BackupGroup[]) => request<BackupJob>("/admin/backups", json("POST", { name, note, groups })),
   update: (id: string, name: string, note: string) => request<BackupEntry>(`/admin/backups/${id}`, json("PATCH", { name, note })),
   remove: (id: string) => request(`/admin/backups/${id}`, { method: "DELETE" }),
   job: (id: string) => request<BackupJob>(`/admin/backups/jobs/${id}`),
@@ -30,7 +33,7 @@ export const backups = {
     const body = new FormData(); body.append("file", file); body.append("password", password); body.append("name", name);
     return requestMultipart<BackupJob>("/admin/backups/import", body);
   },
-  restore: (id: string, currentPassword: string, confirmation: string) => request<BackupJob>(`/admin/backups/${id}/restore`, json("POST", { currentPassword, confirmation })),
+  restore: (id: string, currentPassword: string, confirmation: string, groups: BackupGroup[]) => request<BackupJob>(`/admin/backups/${id}/restore`, json("POST", { currentPassword, confirmation, groups })),
   download: async (id: string, currentPassword: string) => {
     const response = await fetch(`/api/v1/admin/backups/${id}/download`, {
       method: "POST", credentials: "include", headers: { "content-type": "application/json", "x-csrf-token": sessionStorage.getItem("netsentinel.csrf") ?? "" },

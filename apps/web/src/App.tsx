@@ -11,7 +11,7 @@ import {
   ThemeProvider,
   Typography,
 } from "@mui/material";
-import { LockOutlined, MailOutline, ShieldOutlined } from "@mui/icons-material";
+import { LockOutlined, PersonOutline, ShieldOutlined } from "@mui/icons-material";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, type CurrentUser } from "./api";
@@ -37,6 +37,7 @@ import { PublicStatusPage } from "./pages/PublicStatus";
 import { BackupsPage } from "./pages/Backups";
 import { OnboardingPage } from "./pages/Onboarding";
 import { AccountSecurityPage } from "./pages/AccountSecurity";
+import { MailSettingsPage } from "./pages/MailSettings";
 import { SettingsLayout } from "./pages/Settings";
 import { SecureLoginPage } from "./pages/SecureLogin";
 import { onboarding, acceptLogin, type LoginResult } from "./onboarding-api";
@@ -77,7 +78,7 @@ function transitionTheme(update: () => void, origin?: HTMLElement): void {
 }
 
 function LoginPage({ onLogin }: { onLogin: (user: CurrentUser) => void }) {
-  const [email, setEmail] = useState("admin@netsentinel.local");
+  const [identifier, setIdentifier] = useState(api.isDemo ? "admin@netsentinel.local" : "");
   const [password, setPassword] = useState(api.isDemo ? "NetSentinel123!" : "");
   const [error, setError] = useState("");
   const [restored] = useState(() => sessionStorage.getItem("netsentinel.restored") === "true");
@@ -89,7 +90,7 @@ function LoginPage({ onLogin }: { onLogin: (user: CurrentUser) => void }) {
     setBusy(true);
     setError("");
     try {
-      const result: LoginResult = api.isDemo ? await api.login(email, password) : await onboarding.login(email, password);
+      const result: LoginResult = api.isDemo ? await api.login(identifier, password) : await onboarding.login(identifier, password);
       if (result.requiresTwoFactor && result.challengeId) { setChallenge(result.challengeId); setSecurityLogin(true); setPassword(""); return; }
       const user = api.isDemo ? result.user! : acceptLogin(result);
       sessionStorage.removeItem("netsentinel.restored");
@@ -114,18 +115,17 @@ function LoginPage({ onLogin }: { onLogin: (user: CurrentUser) => void }) {
       {error && <Alert severity="error">{error}</Alert>}
       {api.isDemo && <Alert severity="info">演示模式已启用，可直接使用预填账号登录。</Alert>}
       <TextField
-        label="邮箱"
+        label={i18n.t("onboarding.identifier")}
         variant="standard"
-        type="email"
-        name="email"
+        name="identifier"
         autoComplete="username"
         required
-        value={email}
-        onChange={(event) => setEmail(event.target.value)}
-        InputProps={{ startAdornment: <InputAdornment position="start"><MailOutline fontSize="small" /></InputAdornment> }}
+        value={identifier}
+        onChange={(event) => setIdentifier(event.target.value)}
+        InputProps={{ startAdornment: <InputAdornment position="start"><PersonOutline fontSize="small" /></InputAdornment> }}
       />
       <TextField
-        label="密码"
+        label={i18n.t("onboarding.loginPassword")}
         variant="standard"
         type="password"
         name="password"
@@ -139,11 +139,11 @@ function LoginPage({ onLogin }: { onLogin: (user: CurrentUser) => void }) {
         size="large"
         variant="contained"
         type="submit"
-        disabled={busy || !email || !password}
+        disabled={busy || !identifier.trim() || !password}
         disableElevation
         sx={{ minHeight: 48, mt: 1, borderRadius: 1.5 }}
       >
-        {busy ? "正在登录…" : "登录"}
+        {i18n.t(busy ? "onboarding.signingIn" : "onboarding.login")}
       </Button>
       {!api.isDemo && <Button
         size="small"
@@ -383,6 +383,7 @@ export function App() {
               <Route path="general" element={<SettingsPage />} />
               <Route path="backups" element={<BackupsPage />} />
               <Route path="security" element={<AccountSecurityPage />} />
+              <Route path="mail" element={<MailSettingsPage />} />
               <Route path="*" element={<Navigate to="/settings" replace />} />
             </Route>
             <Route path="backups" element={<Navigate to="/settings/backups" replace />} />

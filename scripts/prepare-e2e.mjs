@@ -19,7 +19,7 @@ if (!status.initialized) {
   };
   await post("database", { type: "sqlite" });
   const password = process.env.E2E_REAL_PASSWORD ?? "IntegrationPass123!";
-  await post("account", { email: "admin@netsentinel.local", displayName: "Administrator", password, confirmation: password });
+  await post("account", { username: "admin", displayName: "Administrator", password, confirmation: password });
   await post("security", {});
   await post("finish", { enableTotp: false, recoverySaved: true, origin: process.env.WEB_ORIGIN ?? "http://127.0.0.1:5173" });
 }

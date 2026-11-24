@@ -354,12 +354,9 @@ export function Shell({
                 {t("shell.currentView")}
               </Typography>
               <Typography variant="body2" fontWeight={700} noWrap>
-                {activeNav ? t(`nav.${activeNav[1]}`) : t("shell.node")}
+                {activeNav ? t(`nav.${activeNav[1]}`) : "NetSentinel"}
               </Typography>
             </Box>
-            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: { xs: "none", sm: "block" }, ml: 0.5 }}>
-              · {t("shell.node")}
-            </Typography>
           </Stack>
           <Stack direction="row" alignItems="center" gap={0.5}>
             <Tooltip title={t("shell.language")}>
@@ -420,7 +417,7 @@ export function Shell({
       <Menu anchorEl={accountAnchor} open={Boolean(accountAnchor)} onClose={() => setAccountAnchor(null)}>
         <Box sx={{ px: 2, py: 1, maxWidth: 260 }}>
           <Typography variant="body2" fontWeight={800} noWrap>{user.displayName}</Typography>
-          <Typography variant="caption" color="text.secondary" noWrap>{user.email}</Typography>
+          <Typography variant="caption" color="text.secondary" noWrap>{user.email ?? user.username}</Typography>
         </Box>
         <Divider />
         <MenuItem onClick={() => { setAccountAnchor(null); navigate("/settings/security"); }}>
@@ -485,7 +482,7 @@ export function Shell({
           </Stack>
           <Typography variant="caption" color="text.secondary">{t("profile.avatarHint")}</Typography>
           <TextField label={t("profile.displayName")} value={draftDisplayName} onChange={(event) => setDraftDisplayName(event.target.value)} disabled={profileBusy} inputProps={{ maxLength: 120 }} />
-          <TextField label={t("profile.email")} value={user.email} disabled />
+          <TextField label={t("profile.email")} value={user.email ?? ""} disabled />
           <Box sx={{ flex: 1 }} />
           <Stack direction="row" justifyContent="flex-end" gap={1}>
             <Button onClick={() => setProfileOpen(false)} disabled={profileBusy}>{t("common.cancel")}</Button>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Drawer, FormControlLabel, LinearProgress, MenuItem, Paper, Skeleton, Stack, Switch, TextField, Typography } from "@mui/material";
+import { BACKUP_GROUPS, type BackupGroup } from "@netsentinel/contracts";
+import { Alert, Box, Button, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Drawer, FormControlLabel, LinearProgress, MenuItem, Paper, Skeleton, Stack, Switch, TextField, Typography } from "@mui/material";
 import { AddOutlined, DownloadOutlined, FileUploadOutlined, HistoryOutlined, MoreHorizOutlined, SaveOutlined, ScheduleOutlined } from "@mui/icons-material";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -11,6 +12,15 @@ import "../backup-i18n";
 
 type Action = "create" | "import" | "edit" | "download" | "restore" | "delete";
 const bytes = (value: number) => value < 1024 * 1024 ? `${(value / 1024).toFixed(1)} KB` : `${(value / 1024 / 1024).toFixed(1)} MB`;
+function Groups({ value, available = BACKUP_GROUPS, onChange }: { value: BackupGroup[]; available?: readonly BackupGroup[]; onChange(groups: BackupGroup[]): void }) {
+  const { t } = useTranslation();
+  return <Box component="fieldset" sx={{ m: 0, border: 1, borderColor: "divider", borderRadius: 2, px: 2, pb: 1 }}>
+    <Typography component="legend" variant="subtitle2" sx={{ px: 0.5 }}>{t("backup.groupsLabel")}</Typography>
+    <Stack>{available.map((group) => <FormControlLabel key={group}
+      control={<Checkbox checked={value.includes(group)} onChange={(_, checked) => onChange(checked ? [...value, group] : value.filter((item) => item !== group))} />}
+      label={<Box><Typography variant="body2">{t(`backup.groups.${group}`)}</Typography><Typography variant="caption" color="text.secondary">{t(`backup.groupHints.${group}`)}</Typography></Box>} />)}</Stack>
+  </Box>;
+}
 export function BackupsPage() {
   const { t, i18n } = useTranslation();
   const client = useQueryClient();
@@ -24,6 +34,7 @@ export function BackupsPage() {
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [policyOpen, setPolicyOpen] = useState(false);
   const [action, setAction] = useState<Action | null>(null);
+  const [groups, setGroups] = useState<BackupGroup[]>([...BACKUP_GROUPS]);
   const [selected, setSelected] = useState<BackupEntry | null>(null);
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
@@ -36,7 +47,7 @@ export function BackupsPage() {
   const [job, setJob] = useState<BackupJob | null>(null);
   const [preview, setPreview] = useState<BackupEntry | null>(null);
   const [reconnecting, setReconnecting] = useState(false);
-  useEffect(() => { if (policy.data) setDraft(policy.data); }, [policy.data]);
+  useEffect(() => { if (policy.data) setDraft({ ...policy.data, groups: policy.data.groups ?? [...BACKUP_GROUPS] }); }, [policy.data]);
   useEffect(() => {
     if (!job || job.status !== "running") return;
     let stopped = false;
@@ -44,7 +55,7 @@ export function BackupsPage() {
       void backups.job(job.id).then(async (next) => {
         if (stopped) return;
         if (next.status === "succeeded") {
-          if (next.type === "restore") {
+          if (next.type === "restore" && next.sessionReset !== false) {
             sessionStorage.removeItem("netsentinel.user"); sessionStorage.removeItem("netsentinel.csrf");
             sessionStorage.setItem("netsentinel.restored", "true"); window.location.assign("/"); return;
           }
@@ -60,7 +71,7 @@ export function BackupsPage() {
         if (!stopped) setJob(next);
       }).catch((error: unknown) => {
         if (stopped) return;
-        if (job.type === "restore" && error instanceof ApiError && error.status === 401) {
+        if (job.type === "restore" && job.sessionReset !== false && error instanceof ApiError && error.status === 401) {
           setReconnecting(true);
           void fetch("/api/v1/health/ready").then((response) => response.json()).then((health: { restoring?: boolean }) => {
             if (!health.restoring && !stopped) {
@@ -75,6 +86,7 @@ export function BackupsPage() {
   }, [job?.id, job?.status, t, client]);
   const open = (next: Action, entry?: BackupEntry) => {
     setAction(next); setSelected(entry ?? null); setName(entry?.name ?? `${t("backup.sources.manual")} ${new Date().toLocaleString(i18n.language)}`);
+    setGroups([...(entry?.groups ?? BACKUP_GROUPS)]);
     setNote(entry?.note ?? ""); setSecret(""); setConfirmation(""); setFile(undefined); setError(""); setMessage("");
   };
   const run = async (operation: () => Promise<unknown>) => {
@@ -83,7 +95,7 @@ export function BackupsPage() {
   };
   const submit = () => run(async () => {
     let started: BackupJob | undefined;
-    if (action === "create") started = await backups.create(name.trim(), note);
+    if (action === "create") started = await backups.create(name.trim(), note, groups);
     if (action === "import") {
       if (!file) return;
       if (file.size > (policy.data?.uploadMaxBytes ?? 1024 ** 3)) throw new Error(t("backup.uploadTooLarge", { lng: "zh-CN" }));
@@ -92,7 +104,7 @@ export function BackupsPage() {
     if (action === "edit" && selected) await backups.update(selected.id, name.trim(), note);
     if (action === "delete" && selected) await backups.remove(selected.id);
     if (action === "download" && selected) await backups.download(selected.id, secret);
-    if (action === "restore" && selected) started = await backups.restore(selected.id, secret, confirmation);
+    if (action === "restore" && selected) started = await backups.restore(selected.id, secret, confirmation, groups);
     if (started) setJob(started); else setMessage(t("backup.complete"));
     setAction(null); setSecret(""); setConfirmation("");
     await client.invalidateQueries({ queryKey: ["backups"] });
@@ -152,7 +164,8 @@ export function BackupsPage() {
           <TextField type="time" label={t("backup.time")} slotProps={{ inputLabel: { shrink: true } }} value={draft.time} onChange={(e) => setDraft({ ...draft, time: e.target.value })} />
           <TextField label={t("backup.timezone")} value={draft.timezone} onChange={(e) => setDraft({ ...draft, timezone: e.target.value })} />
           <TextField type="number" label={t("backup.retain")} value={draft.retain} onChange={(e) => setDraft({ ...draft, retain: Number(e.target.value) })} helperText={t("backup.retainHint")} />
-          <Button variant="contained" disabled={busy || processing} startIcon={<SaveOutlined />} onClick={() => void savePolicy()}>{t("backup.save")}</Button></>}
+          <Groups value={draft.groups} onChange={(groups) => setDraft({ ...draft, groups })} />
+          <Button variant="contained" disabled={busy || processing || !draft.groups.length} startIcon={<SaveOutlined />} onClick={() => void savePolicy()}>{t("backup.save")}</Button></>}
         <Button onClick={() => setPolicyOpen(false)}>{t("backup.close")}</Button>
       </Stack>
     </Drawer>
@@ -163,15 +176,16 @@ export function BackupsPage() {
         {["create", "edit", "import"].includes(action ?? "") && <TextField label={t("backup.name")} value={name} onChange={(e) => setName(e.target.value)} inputProps={{ maxLength: 120 }} />}
         {["create", "edit"].includes(action ?? "") && <TextField label={t("backup.note")} multiline minRows={2} value={note} onChange={(e) => setNote(e.target.value)} inputProps={{ maxLength: 2000 }} />}
         {action === "download" && <Alert severity="info">{t("backup.downloadHint")}</Alert>}
-        {action === "restore" && <Alert severity="warning">{t("backup.restoreWarning")}</Alert>}
+        {action === "restore" && <Alert severity="warning">{t(groups.includes("accounts") ? "backup.restoreAccounts" : "backup.restoreSelection")}</Alert>}
+        {(action === "create" || action === "restore") && <Groups value={groups} available={action === "restore" ? selected?.groups : undefined} onChange={setGroups} />}
         {action === "delete" && <Alert severity="warning">{t("backup.deleteWarning")}</Alert>}
         {["download", "restore", "import"].includes(action ?? "") && <TextField label={t(action === "import" ? "backup.importPassword" : "backup.currentPassword")} type="password" autoComplete="off" value={secret} onChange={(e) => setSecret(e.target.value)} />}
         {action === "restore" && <TextField label={t("backup.confirmation")} value={confirmation} onChange={(e) => setConfirmation(e.target.value)} />}
         {busy && <LinearProgress />}
-      </Stack></DialogContent><DialogActions><Button disabled={busy} onClick={() => setAction(null)}>{t("backup.cancel")}</Button><Button variant="contained" color={action === "delete" || action === "restore" ? "error" : "primary"} disabled={busy || (["create", "edit", "import"].includes(action ?? "") && !name.trim()) || (["download", "restore", "import"].includes(action ?? "") && !secret) || (action === "import" && !file) || (action === "restore" && confirmation !== "RESTORE")} onClick={() => void submit()}>{t("backup.confirm")}</Button></DialogActions>
+      </Stack></DialogContent><DialogActions><Button disabled={busy} onClick={() => setAction(null)}>{t("backup.cancel")}</Button><Button variant="contained" color={action === "delete" || action === "restore" ? "error" : "primary"} disabled={busy || ((action === "create" || action === "restore") && !groups.length) || (["create", "edit", "import"].includes(action ?? "") && !name.trim()) || (["download", "restore", "import"].includes(action ?? "") && !secret) || (action === "import" && !file) || (action === "restore" && confirmation !== "RESTORE")} onClick={() => void submit()}>{t("backup.confirm")}</Button></DialogActions>
     </Dialog>
     <Drawer anchor="right" open={preview !== null} onClose={() => setPreview(null)} PaperProps={{ sx: { width: { xs: "100%", sm: 480 }, p: 3 } }}>
-      {preview && <Stack gap={2.5}><Typography variant="h2">{t("backup.details")}</Typography>{preview.source === "import" && <Alert severity="info">{t("backup.preview")}</Alert>}<Typography fontWeight={700} sx={{ overflowWrap: "anywhere" }}>{preview.name}</Typography><Typography color="text.secondary">{date(preview.dataTime)}</Typography><Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>{preview.note}</Typography><Divider /><Typography fontWeight={650}>{t("backup.records")}</Typography>{Object.entries(preview.counts ?? {}).map(([table, count]) => <Stack key={table} direction="row" justifyContent="space-between"><Typography variant="body2">{table}</Typography><Typography variant="body2" sx={{ fontVariantNumeric: "tabular-nums" }}>{count.toLocaleString(i18n.language)}</Typography></Stack>)}<Button variant="contained" disabled={processing || preview.status !== "ready" || !policy.data?.passwordConfigured} onClick={() => { open("restore", preview); setPreview(null); }}>{t("backup.restore")}</Button><Button onClick={() => setPreview(null)}>{t("backup.close")}</Button></Stack>}
+      {preview && <Stack gap={2.5}><Typography variant="h2">{t("backup.details")}</Typography>{preview.source === "import" && <Alert severity="info">{t("backup.preview")}</Alert>}<Typography fontWeight={700} sx={{ overflowWrap: "anywhere" }}>{preview.name}</Typography><Typography color="text.secondary">{date(preview.dataTime)}</Typography><Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>{preview.note}</Typography><Stack direction="row" flexWrap="wrap" gap={1}>{(preview.groups ?? BACKUP_GROUPS).map((group) => <Chip key={group} size="small" label={t(`backup.groups.${group}`)} />)}</Stack><Divider /><Typography fontWeight={650}>{t("backup.records")}</Typography>{Object.entries(preview.counts ?? {}).map(([table, count]) => <Stack key={table} direction="row" justifyContent="space-between"><Typography variant="body2">{table}</Typography><Typography variant="body2" sx={{ fontVariantNumeric: "tabular-nums" }}>{count.toLocaleString(i18n.language)}</Typography></Stack>)}<Button variant="contained" disabled={processing || preview.status !== "ready" || !policy.data?.passwordConfigured} onClick={() => { open("restore", preview); setPreview(null); }}>{t("backup.restore")}</Button><Button onClick={() => setPreview(null)}>{t("backup.close")}</Button></Stack>}
     </Drawer>
   </>;
 }

@@ -16,7 +16,7 @@ export function AuthLayout({ title, onSubmit, children }: {
       component="form"
       data-testid="auth-form"
       onSubmit={onSubmit}
-      sx={{ width: "100%", maxWidth: 380 }}
+      sx={{ width: "100%", maxWidth: 448, p: { xs: 2.5, sm: 4 }, bgcolor: "background.paper", border: 1, borderColor: "divider", borderRadius: 3 }}
     >
       <Stack direction="row" justifyContent="center" alignItems="center" gap={1.25} sx={{ mb: 2 }}>
         <Box sx={{ display: "grid", placeItems: "center", width: 42, height: 42, borderRadius: 2, bgcolor: "primary.main", color: "primary.contrastText" }}>

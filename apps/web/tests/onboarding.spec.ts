@@ -26,7 +26,7 @@ test("four-step installation supports optional 2FA and mandatory recovery acknow
     if (path.endsWith("/status")) return route.fulfill({ json: { initialized: finished, step, database: step ? "sqlite" : null } });
     if (path.endsWith("/unlock")) return route.fulfill({ json: { csrfToken: "setup-csrf" } });
     if (path.endsWith("/database")) { expect(route.request().postDataJSON()).toEqual({ type: "sqlite" }); step = 1; return route.fulfill({ json: { ok: true } }); }
-    if (path.endsWith("/account")) { expect(route.request().postDataJSON().email).toBe("owner@example.com"); step = 2; return route.fulfill({ json: { ok: true } }); }
+    if (path.endsWith("/account")) { expect(route.request().postDataJSON().username).toBe("owner"); expect(route.request().postDataJSON()).not.toHaveProperty("email"); step = 2; return route.fulfill({ json: { ok: true } }); }
     if (path.endsWith("/security")) return route.fulfill({ json: { recoveryKey: "recovery-test-key-save-offline-never-log", secret: "JBSWY3DPEHPK3PXP", otpauth: "otpauth://totp/test", qrCode: "data:image/png;base64,iVBORw0KGgo=", backupCodes: ["one-time-backup-code"] } });
     if (path.endsWith("/finish")) {
       acknowledged = route.request().postDataJSON().recoverySaved; expect(acknowledged).toBe(true);
@@ -43,8 +43,7 @@ test("four-step installation supports optional 2FA and mandatory recovery acknow
   await page.getByLabel("一次性安装令牌").fill("token-from-server-logs");
   await page.getByRole("button", { name: "验证安装令牌" }).click();
   await page.getByRole("button", { name: "下一步", exact: true }).click();
-  await page.getByLabel("管理员邮箱").fill("owner@example.com");
-  await page.getByLabel("显示名称").fill("Owner");
+  await page.getByLabel("账号名称").fill("owner");
   await page.getByLabel("管理员密码", { exact: true }).fill("Install-password-123!");
   await page.getByLabel("再次输入密码").fill("Install-password-123!");
   await page.getByRole("button", { name: "下一步", exact: true }).click();

@@ -1,3 +1,4 @@
+import { AccountEmailPanel } from "./MailSettings";
 import { useState } from "react";
 import { Alert, Box, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Paper, Stack, TextField, Typography } from "@mui/material";
 import { useQuery } from "@tanstack/react-query";
@@ -31,6 +32,7 @@ export function AccountSecurityPage() {
         {query.data?.totpEnabled && <><Button disabled={busy || !password || !code} onClick={() => void rotate("backup")}>{t("onboarding.rotateBackup")}</Button><Button color="error" disabled={busy || !password || !code} onClick={() => void rotate("disable")}>{t("onboarding.disable")}</Button></>}
       </Stack>
     </Stack></Paper>
+    <AccountEmailPanel />
     <Dialog open={Boolean(result)} fullWidth maxWidth="sm"><DialogTitle>{t("onboarding.accountSecurity")}</DialogTitle><DialogContent><Stack gap={2}>{result && <SecurityInformation draft={result} />}<FormControlLabel control={<Checkbox checked={saved} onChange={(event) => setSaved(event.target.checked)} />} label={t("onboarding.saved")} /></Stack></DialogContent><DialogActions><Button disabled={!saved} onClick={() => setResult(undefined)}>{t("onboarding.acknowledge")}</Button></DialogActions></Dialog>
   </>;
 }

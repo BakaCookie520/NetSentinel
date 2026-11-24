@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test.use({ storageState: { cookies: [], origins: [] } });
 
 for (const mode of ["light", "dark"]) {
-  test(`login is centered on a plain ${mode} surface`, async ({ page }, testInfo) => {
+  test(`login is centered on a distinct ${mode} surface`, async ({ page }, testInfo) => {
     await page.addInitScript((theme) => localStorage.setItem("netsentinel.theme", theme), mode);
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "登录控制台" })).toBeVisible();
@@ -15,7 +15,9 @@ for (const mode of ["light", "dark"]) {
     expect(await page.getByTestId("auth-layout").evaluate((element) => getComputedStyle(element).backgroundImage)).toBe("none");
     expect(await form.evaluate((element) => getComputedStyle(element).boxShadow)).toBe("none");
     await expect(page.locator(".login-intro")).toHaveCount(0);
-    await expect(page.getByLabel("邮箱")).toHaveAttribute("autocomplete", "username");
+    expect(await form.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe(await page.getByTestId("auth-layout").evaluate((element) => getComputedStyle(element).backgroundColor));
+    expect(await form.evaluate((element) => getComputedStyle(element).borderTopWidth)).toBe("1px");
+    await expect(page.getByLabel("账号名称或邮箱")).toHaveAttribute("autocomplete", "username");
     await expect(page.getByLabel(/^密码/)).toHaveAttribute("autocomplete", "current-password");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`login-${mode}.png`), fullPage: true });
@@ -25,6 +27,7 @@ for (const mode of ["light", "dark"]) {
 test("short viewport keeps inputs and submit reachable", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 320 });
   await page.goto("/");
+  await page.getByLabel("账号名称或邮箱").fill("admin");
   await page.getByLabel(/^密码/).fill("wrong-test-password");
   await page.route("**/api/v1/auth/login", (route) => route.fulfill({ status: 401, json: { detail: "AUTH_INVALID" } }));
   await page.getByRole("button", { name: "登录", exact: true }).click();
@@ -43,6 +46,7 @@ test("keyboard submission preserves the two-factor challenge", async ({ page }) 
     return route.fulfill({ status: 401, json: { detail: "AUTH_INVALID" } });
   });
   await page.goto("/");
+  await page.getByLabel("账号名称或邮箱").fill("owner");
   const password = page.getByLabel(/^密码/);
   await password.fill("test-password");
   await password.press("Enter");
@@ -56,6 +60,7 @@ test("keyboard submission preserves the two-factor challenge", async ({ page }) 
 
 test("password login still opens the console", async ({ page }) => {
   await page.goto("/");
+  await page.getByLabel("账号名称或邮箱").fill("admin");
   await page.getByLabel(/^密码/).fill(process.env.E2E_REAL_PASSWORD ?? "IntegrationPass123!");
   await page.getByRole("button", { name: "登录", exact: true }).click();
   await expect(page.getByRole("heading", { name: "运行总览" })).toBeVisible();

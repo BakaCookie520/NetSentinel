@@ -15,9 +15,9 @@ export class SqliteAdapter implements Adapter {
     worker.on("error", (error) => { for (const callback of this.pending.values()) callback.reject(error instanceof Error ? error : new Error("STORAGE_WORKER_FAILED")); this.pending.clear(); });
     worker.on("exit", () => { for (const callback of this.pending.values()) callback.reject(new Error("STORAGE_CLOSED")); this.pending.clear(); });
   }
-  static async open(path: string): Promise<SqliteAdapter> {
+  static async open(path: string, options: { archiveStaging?: boolean } = {}): Promise<SqliteAdapter> {
     await mkdir(dirname(path), { recursive: true, mode: 0o700 });
-    const adapter = new SqliteAdapter(new Worker(new URL("./sqlite-worker.js", import.meta.url), { workerData: { path } }));
+    const adapter = new SqliteAdapter(new Worker(new URL("./sqlite-worker.js", import.meta.url), { workerData: { path, ...options } }));
     await adapter.revision();
     await chmod(path, 0o600);
     return adapter;

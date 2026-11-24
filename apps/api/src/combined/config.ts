@@ -22,6 +22,7 @@ export interface Installation {
   database?: DatabaseConfig;
   initialized: boolean;
   email?: string;
+  username?: string;
   displayName?: string;
   passwordHash?: string;
   origin?: string;

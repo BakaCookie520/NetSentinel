@@ -117,6 +117,8 @@ export class RedisAdapter implements Adapter {
   }
   private async apply(mutations: Mutation[]) { await this.client.eval(applyScript, 0, JSON.stringify(await this.commands(mutations))); }
   async commit(expected: number, mutations: Mutation[]) {
+    // Redis has no relational constraints; only apply the final value per key.
+    mutations = [...new Map(mutations.map((mutation) => [`${mutation.entity}:${mutation.key}`, mutation])).values()];
     const connection = this.client.duplicate();
     try {
       await connection.watch(`${this.prefix}revision`, `${this.prefix}journal`);

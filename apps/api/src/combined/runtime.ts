@@ -4,6 +4,7 @@ import { EventEmitter } from "node:events";
 import { CronExpressionParser } from "cron-parser";
 import { monitorInputSchema } from "@netsentinel/contracts";
 import { advanceMonitorState, decryptSecret, isAddressAllowed, runHttpProbe, runWebSocketProbe, runTcpProbe, runIcmpProbe, type AuthorizedTarget, type ProbeResult, type SecretEnvelope } from "@netsentinel/core";
+import { readMail, smtpOptions } from "./mail-config.js";
 import { executeAction, buildCredentialHeaders, materializeWebSocketCredential, type ExecutionResult, type HttpCredentialType, type WebSocketCredentialType } from "@netsentinel/worker/execution";
 import type { Store, UnitOfWork } from "../storage/store.js";
 import type { EntityRow } from "../storage/model.js";
@@ -203,7 +204,7 @@ export class CombinedRuntime {
           const credential = step.credentialId ? await this.store.get("Credential", step.credentialId) : null;
           result = await executeAction(step, credential ? { type: credential.type, secret: decryptSecret(credential.encrypted as unknown as SecretEnvelope, this.key, credential.id) } : null,
             { monitor: { name: monitor?.name ?? "Manual", target: monitor?.target ?? "" }, incident: { id: run.incidentId ?? run.id }, event: { type: run.trigger } },
-            { authorize: this.authorize.bind(this), agent: this.agentCommand });
+            { authorize: this.authorize.bind(this), agent: this.agentCommand, systemSmtp: async () => { const mail = await readMail(this.store, this.key); return mail?.enabled ? smtpOptions(mail) : null; } });
           await this.store.transaction((tx) => tx.put("StepRun", { ...stepRun, status: result.status, output: result.output ?? null, errorMessage: result.error ?? null, finishedAt: new Date().toISOString() }));
           if (result.status !== "FAILED") break;
         }

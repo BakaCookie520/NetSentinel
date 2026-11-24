@@ -18,11 +18,11 @@ export function acceptLogin(result: LoginResult): CurrentUser {
 }
 export const onboarding = {
   status: () => request<SetupStatus>("/setup/status"),
-  unlock: (token: string) => setupRequest<{ csrfToken: string; email?: string; displayName?: string }>("unlock", { token }),
+  unlock: (token: string) => setupRequest<{ csrfToken: string; username?: string; displayName?: string }>("unlock", { token }),
   security: () => request<{ totpEnabled: boolean; recoveryConfigured: boolean; backupCodesRemaining: number }>("/auth/me/security"),
-  login: (email: string, password: string) => request<LoginResult>("/auth/login", json({ email, password })),
+  login: (identifier: string, password: string) => request<LoginResult>("/auth/login", json({ identifier, password })),
   secondFactor: (challengeId: string, code: string) => request<LoginResult>("/auth/two-factor", json({ challengeId, code })),
-  recover: (email: string, recoveryKey: string, password: string, confirmation: string) => request<{ recoveryToken: string; recoveryKey: string }>("/auth/recover", json({ email, recoveryKey, password, confirmation })),
+  recover: (identifier: string, recoveryKey: string, password: string, confirmation: string) => request<{ recoveryToken: string; recoveryKey: string }>("/auth/recover", json({ identifier, recoveryKey, password, confirmation })),
   confirmRecovery: (recoveryToken: string) => request("/auth/recover/confirm", json({ recoveryToken, saved: true })),
   enroll: (currentPassword: string) => request<SecurityDraft>("/auth/me/security/enroll", json({ currentPassword })),
   confirm: (currentPassword: string, code: string) => request<{ backupCodes: string[] }>("/auth/me/security/confirm", json({ currentPassword, code })),

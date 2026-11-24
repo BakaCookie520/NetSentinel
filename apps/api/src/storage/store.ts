@@ -25,6 +25,16 @@ export class Store {
       if (rows.length < 500) return;
     } while (true);
   }
+  // Restore validates the final projection before returning ordered replacements.
+  applyReplacement(prepare: () => Promise<Mutation[]>): Promise<void> {
+    const operation = this.tail.then(async () => {
+      const revision = await this.adapter.revision();
+      const mutations = await prepare();
+      await this.adapter.commit(revision, mutations);
+    });
+    this.tail = operation.catch(() => undefined);
+    return operation;
+  }
   transaction<T>(action: (tx: UnitOfWork) => Promise<T>): Promise<T> {
     const operation = this.tail.then(async () => {
       for (let attempt = 0; attempt < 4; attempt += 1) {

@@ -9,6 +9,7 @@ import type { CombinedRuntime } from "./runtime.js";
 import QRCode from "qrcode";
 import { entities, privateSetting } from "../storage/model.js";
 import { requireLegacyDrain } from "./legacy.js";
+import { findAccount, hasIdentifier, loginFields, legacyUsername, usernameSchema } from "./account-name.js";
 
 export interface ApplicationState { config: InstallationConfig; store?: Store; runtime?: CombinedRuntime; activate(store: Store): Promise<void> }
 const parse = <T>(schema: z.ZodType<T>, body: unknown): T => schema.parse(body);
@@ -41,7 +42,7 @@ export function mountSetup(app: Express, state: ApplicationState) {
     const id = randomBytes(32).toString("base64url"); const csrf = randomBytes(24).toString("base64url");
     sessions.set(id, { csrf: digest(csrf), expires: Date.now() + 30 * 60000, origin: request.headers.origin });
     response.cookie("netsentinel_setup", id, { httpOnly: true, sameSite: "strict", secure: process.env.COOKIE_SECURE === "true", path: "/api/v1/setup", maxAge: 30 * 60000 });
-    response.json({ csrfToken: csrf, email: state.config.state.email, displayName: state.config.state.displayName });
+    response.json({ csrfToken: csrf, username: state.config.state.username, displayName: state.config.state.displayName });
   });
   app.post("/api/v1/setup/database", async (request, response) => {
     authorize(request);
@@ -66,10 +67,10 @@ export function mountSetup(app: Express, state: ApplicationState) {
   app.post("/api/v1/setup/adopt", async (request, response) => {
     authorize(request);
     await exclusive(async () => {
-      const input = parse(z.object({ database: databaseSchema, email: z.string().email(), password: z.string().min(1).max(1024), code: z.string().optional() }), request.body);
+      const input = parse(z.object({ database: databaseSchema, ...loginFields, password: z.string().min(1).max(1024), code: z.string().optional() }).refine(hasIdentifier), request.body);
       const store = await openDatabase(input.database, true);
       try {
-        const user = (await store.list("User", { filters: [{ field: "email", op: "eq", value: input.email.toLowerCase() }], limit: 1 }))[0];
+        const user = await findAccount(store, input);
         if (!user || user.disabledAt || !await passwordMatches(user.passwordHash, input.password)) throw new Error("AUTH_INVALID");
         const { identity, verifySecondFactor } = await import("./security.js");
         const principal = await identity(store, user);
@@ -89,9 +90,9 @@ export function mountSetup(app: Express, state: ApplicationState) {
     const id = authorize(request);
     await exclusive(async () => {
       if (!state.config.state.database || !state.store) throw new Error("SETUP_DATABASE_REQUIRED");
-      const input = parse(z.object({ email: z.string().email().max(254), displayName: z.string().trim().min(1).max(120), password: z.string().min(12).max(1024), confirmation: z.string() }), request.body);
+      const input = parse(z.object({ username: usernameSchema, displayName: z.string().trim().min(1).max(120).optional(), password: z.string().min(12).max(1024), confirmation: z.string() }), request.body);
       if (input.password !== input.confirmation) throw new Error("PASSWORD_MISMATCH");
-      await state.config.save({ ...state.config.state, email: input.email.toLowerCase(), displayName: input.displayName, passwordHash: await passwordHash(input.password) });
+      await state.config.save({ ...state.config.state, email: undefined, username: input.username, displayName: input.displayName ?? input.username, passwordHash: await passwordHash(input.password) });
       drafts.delete(id);
       response.json({ ok: true });
     });
@@ -101,7 +102,7 @@ export function mountSetup(app: Express, state: ApplicationState) {
     if (!state.config.state.passwordHash) throw new Error("SETUP_ACCOUNT_REQUIRED");
     const draft = { recovery: newRecovery(), backup: newBackupCodes(), secret: totpSecret() };
     drafts.set(id, draft);
-    const issuer = "NetSentinel"; const label = encodeURIComponent(`${issuer}:${state.config.state.email}`);
+    const issuer = "NetSentinel"; const label = encodeURIComponent(`${issuer}:${state.config.state.username ?? state.config.state.email}`);
     const otpauth = `otpauth://totp/${label}?secret=${draft.secret}&issuer=${issuer}`;
     response.json({ recoveryKey: draft.recovery.key, backupCodes: draft.backup.codes, secret: draft.secret, otpauth, qrCode: await QRCode.toDataURL(otpauth) });
   });
@@ -110,13 +111,14 @@ export function mountSetup(app: Express, state: ApplicationState) {
     await exclusive(async () => {
       const input = parse(z.object({ enableTotp: z.boolean(), code: z.string().max(128).optional(), recoverySaved: z.literal(true), origin: z.string().url().optional() }), request.body);
       const draft = drafts.get(id); const installation = state.config.state; const store = state.store;
-      if (!draft || !installation.email || !installation.passwordHash || !store) throw new Error("SETUP_SECURITY_REQUIRED");
+      if (!draft || !(installation.username || installation.email) || !installation.passwordHash || !store) throw new Error("SETUP_SECURITY_REQUIRED");
       const counter = input.enableTotp ? verifyTotp(draft.secret, input.code ?? "") : -1;
       if (counter === null) throw new Error("AUTH_2FA_INVALID");
       const userId = await store.transaction(async (tx) => {
         if ((await tx.list("User", { limit: 1 })).length) throw new Error("SETUP_CLOSED");
         const role = await tx.put("Role", { name: "system-admin", system: true, permissions: [...PERMISSIONS] });
-        const user = await tx.put("User", { email: installation.email!, displayName: installation.displayName!, passwordHash: installation.passwordHash! });
+        const user = await tx.put("User", { email: installation.email ?? null, username: installation.username, displayName: installation.displayName!, passwordHash: installation.passwordHash! });
+        if (!user.username) await tx.put("User", { ...user, username: legacyUsername(user.id) });
         await tx.put("UserRole", { userId: user.id, roleId: role.id });
         await tx.put("AccountSecurity", { userId: user.id, recoveryHash: draft.recovery.hash, totpEncrypted: input.enableTotp ? encryptTotp(draft.secret, state.config.key, user.id) : null, totpLastCounter: counter, backupHashes: input.enableTotp ? draft.backup.hashes : [] });
         await tx.put("Setting", { key: "__initialized", value: true });

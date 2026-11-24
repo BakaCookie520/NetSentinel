@@ -2,26 +2,37 @@ import { parentPort, workerData } from "node:worker_threads";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { entities, fieldsOf, modelOf, primaryOf, type Mutation, type Query, type RecordData } from "./model.js";
 
-const database = new DatabaseSync((workerData as { path: string }).path);
-database.exec("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA synchronous=FULL");
+const { path, archiveStaging } = workerData as { path: string; archiveStaging?: boolean };
+const database = new DatabaseSync(path);
+database.exec("PRAGMA foreign_keys=OFF; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA synchronous=FULL");
 const quote = (value: string) => `"${value.replaceAll('"', '""')}"`;
 const version = Number((database.prepare("PRAGMA user_version").get() as { user_version: number }).user_version);
-if (version > 1) throw new Error("STORAGE_SCHEMA_MISMATCH");
+if (version > 2) throw new Error("STORAGE_SCHEMA_MISMATCH");
 const tables = database.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
 if (tables.some((table) => ![...entities, "_storage_meta", "sqlite_sequence"].includes(String(table.name)))) throw new Error("STORAGE_SCHEMA_MISMATCH");
-database.exec("BEGIN IMMEDIATE");
-for (const entity of entities) {
+function createTable(entity: string, name = entity) {
   const fields = fieldsOf(entity);
-  const columns = fields.map((field) => `${quote(field.name)} ${["Int", "Boolean"].includes(field.type) ? "INTEGER" : "TEXT"} ${field.isRequired ? "NOT NULL" : ""}`);
+  const columns = fields.map((field) => `${quote(field.name)} ${["Int", "Boolean"].includes(field.type) ? "INTEGER" : "TEXT"} ${field.isRequired ? `NOT NULL${field.name === "emailVerified" ? " DEFAULT 0" : ""}` : ""}`);
   const unique = [...fields.filter((field) => field.isUnique).map((field) => [field.name]), ...modelOf(entity).uniqueFields, primaryOf(entity)];
   const foreign = modelOf(entity).fields.filter((field) => field.kind === "object" && field.relationFromFields?.length).map((field) =>
     `FOREIGN KEY (${field.relationFromFields!.map(quote).join(",")}) REFERENCES ${quote(field.type)} (${field.relationToFields!.map(quote).join(",")}) ON DELETE ${field.relationOnDelete === "Cascade" ? "CASCADE" : field.relationOnDelete === "SetNull" ? "SET NULL" : "NO ACTION"} DEFERRABLE INITIALLY DEFERRED`);
-  database.exec(`CREATE TABLE IF NOT EXISTS ${quote(entity)} (_key TEXT PRIMARY KEY, ${[...columns, ...unique.map((fields) => `UNIQUE (${fields.map(quote).join(",")})`), ...foreign].join(",")})`);
-  for (const field of fields.filter((field) => !field.isList && field.type !== "Json")) {
+  database.exec(`CREATE TABLE IF NOT EXISTS ${quote(name)} (_key TEXT PRIMARY KEY, ${[...columns, ...unique.map((fields) => `UNIQUE (${fields.map(quote).join(",")})`), ...foreign].join(",")})`);
+}
+database.exec("BEGIN IMMEDIATE");
+if (version === 1) {
+  createTable("User", "_user_upgrade");
+  const columns = ["_key", ...fieldsOf("User").filter((field) => !["username", "emailVerified"].includes(field.name)).map((field) => field.name)].map(quote).join(",");
+  database.exec(`INSERT INTO "_user_upgrade" (${columns}) SELECT ${columns} FROM "User"; DROP TABLE "User"; ALTER TABLE "_user_upgrade" RENAME TO "User";`);
+  if (database.prepare("PRAGMA foreign_key_check").get()) throw new Error("STORAGE_RELATION_INVALID");
+}
+for (const entity of entities) {
+  createTable(entity);
+  for (const field of fieldsOf(entity).filter((field) => !field.isList && field.type !== "Json")) {
     database.exec(`CREATE INDEX IF NOT EXISTS ${quote(`${entity}_${field.name}`)} ON ${quote(entity)} (${quote(field.name)})`);
   }
 }
-database.exec("CREATE TABLE IF NOT EXISTS _storage_meta (id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL); INSERT OR IGNORE INTO _storage_meta VALUES (1,0); PRAGMA user_version=1; COMMIT");
+database.exec("CREATE TABLE IF NOT EXISTS _storage_meta (id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL); INSERT OR IGNORE INTO _storage_meta VALUES (1,0); PRAGMA user_version=2; COMMIT");
+if (!archiveStaging) database.exec("PRAGMA foreign_keys=ON");
 const encode = (entity: string, field: string, value: unknown): SQLInputValue => {
   const meta = fieldsOf(entity).find((item) => item.name === field)!;
   return value === null ? meta.type === "Json" && meta.isRequired ? "null" : null : meta.isList || meta.type === "Json" ? JSON.stringify(value) : meta.type === "Boolean" ? value ? 1 : 0 : value as SQLInputValue;

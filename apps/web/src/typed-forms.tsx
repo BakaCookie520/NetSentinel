@@ -1,3 +1,5 @@
+import i18n from "./i18n";
+import "./mail-i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
@@ -1248,7 +1250,12 @@ function StepEditor({
           )}
           {step.type === "EMAIL" && (
             <>
-              <TextField
+              <TextField select label={i18n.t("mail.transport")} value={step.config.transport ?? "credential"}
+                onChange={(event) => onChange({ ...step, credentialId: null, config: { ...step.config, transport: event.target.value === "system" ? "system" : "credential" } })}>
+                <MenuItem value="credential">{i18n.t("mail.credential")}</MenuItem>
+                <MenuItem value="system">{i18n.t("mail.system")}</MenuItem>
+              </TextField>
+              {step.config.transport !== "system" && <TextField
                 select
                 label="SMTP 凭据"
                 value={step.credentialId ?? ""}
@@ -1261,7 +1268,7 @@ function StepEditor({
                     {item.name}
                   </MenuItem>
                 ))}
-              </TextField>
+              </TextField>}
               <TextField
                 label="收件人"
                 value={String(config.to ?? "")}

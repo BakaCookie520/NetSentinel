@@ -23,6 +23,7 @@ export async function login(page: Page) {
   await page.goto("/");
   const loginHeading = page.getByRole("heading", { name: "登录控制台" });
   if (await loginHeading.isVisible()) {
+    await page.getByLabel("账号名称或邮箱").fill("admin");
     await page
       .getByLabel("密码")
       .fill(process.env.E2E_REAL_PASSWORD ?? "IntegrationPass123!");

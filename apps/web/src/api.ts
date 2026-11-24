@@ -190,7 +190,8 @@ export interface Role {
 }
 export interface User {
   id: string;
-  email: string;
+  email: string | null;
+  username?: string | null;
   displayName: string;
   avatarUrl?: string | null;
   locale: "zh-CN" | "en-US";
@@ -215,7 +216,9 @@ export interface Setting {
 
 export interface CurrentUser {
   id: string;
-  email: string;
+  email: string | null;
+  username?: string | null;
+  emailVerified?: boolean;
   displayName: string;
   avatarUrl: string | null;
   permissions: string[];
@@ -578,7 +581,7 @@ export const api = {
     return request<User[]>("/admin/users");
   },
   async createUser(input: {
-    email: string;
+    username: string;
     displayName: string;
     password: string;
     roleIds: string[];
