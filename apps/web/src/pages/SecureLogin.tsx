@@ -5,6 +5,7 @@ import type { CurrentUser } from "../api";
 import { acceptLogin, onboarding } from "../onboarding-api";
 import { SecurityInformation } from "./Onboarding";
 import { AuthLayout } from "../components/AuthLayout";
+import { errorText } from "../error-messages";
 
 export function SecureLoginPage({ onLogin, initialChallenge = "", initialRecovery = false, onBack }: { onLogin(user: CurrentUser): void; initialChallenge?: string; initialRecovery?: boolean; onBack?(): void }) {
   const { t } = useTranslation();
@@ -24,7 +25,7 @@ export function SecureLoginPage({ onLogin, initialChallenge = "", initialRecover
         if (result.requiresTwoFactor && result.challengeId) setChallenge(result.challengeId);
         else onLogin(acceptLogin(result));
       }
-    } catch (error) { setError(error instanceof Error ? error.message : String(error)); }
+    } catch (error) { setError(errorText(error, "验证失败，请检查输入后重试。")); }
     finally { setBusy(false); }
   };
   return <AuthLayout title={t(recover ? "onboarding.recoverTitle" : "onboarding.loginTitle")} onSubmit={(event) => { event.preventDefault(); void submit(); }}>

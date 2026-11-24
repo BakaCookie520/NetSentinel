@@ -91,7 +91,6 @@ const copy = {
     noServices: "No monitors are published yet",
     disabled: "Public status page is disabled",
     disabledDescription: "This instance is not currently publishing service status.",
-    failed: "Unable to load service status",
     retry: "Reload",
     support: "Get support",
     dayNoData: "No data",
@@ -200,7 +199,7 @@ export function PublicStatusPage() {
             <Box sx={{ minHeight: 360, display: "grid", placeItems: "center" }}><CircularProgress aria-label="loading" /></Box>
           ) : query.isError ? (
             <Paper variant="outlined" sx={{ p: 4, textAlign: "center" }}>
-              <Typography variant="h2">{messages.failed}</Typography>
+              <Typography variant="h2">{copy["zh-CN"].failed}</Typography>
               <Button sx={{ mt: 2 }} variant="contained" onClick={() => void query.refetch()}>{messages.retry}</Button>
             </Paper>
           ) : !query.data?.enabled ? (

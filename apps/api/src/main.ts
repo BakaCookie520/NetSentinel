@@ -17,13 +17,47 @@ function validateEnvironment(): void {
   if (!encoded || Buffer.from(encoded, "base64").length !== 32) throw new Error("NETSENTINEL_MASTER_KEY must be a base64-encoded 32-byte key");
 }
 
+function trustProxySetting(): false | number | string[] {
+  const value = process.env.TRUST_PROXY?.trim();
+  if (!value || value.toLowerCase() === "false") return false;
+  if (value.toLowerCase() === "true") {
+    throw new Error("TRUST_PROXY=true is unsafe; configure a hop count or trusted proxy CIDRs");
+  }
+  if (/^\d+$/u.test(value)) return Number(value);
+  const trusted = value.split(",").map((entry) => entry.trim()).filter(Boolean);
+  if (!trusted.length) throw new Error("TRUST_PROXY must be false, a hop count, or trusted proxy CIDRs");
+  return trusted;
+}
+
+const loginAccountKey = (request: { body?: unknown }) => {
+  const body = request.body;
+  const email =
+    typeof body === "object" &&
+    body !== null &&
+    "email" in body &&
+    typeof body.email === "string"
+      ? body.email.trim().toLowerCase()
+      : "";
+  return `account:${email || "unknown"}`;
+};
+
 async function bootstrap(): Promise<void> {
   validateEnvironment();
   const app = await NestFactory.create(AppModule, { cors: false, logger: new ConsoleLogger({ json: true }) });
-  app.getHttpAdapter().getInstance().set("trust proxy", 1);
+  app.getHttpAdapter().getInstance().set("trust proxy", trustProxySetting());
   app.use(helmet({ contentSecurityPolicy: false }));
   app.use(cookieParser());
-  app.use("/api/v1/auth/login", rateLimit({ windowMs: 15 * 60_000, limit: 10, standardHeaders: "draft-8", legacyHeaders: false }));
+  app.use(
+    "/api/v1/auth/login",
+    rateLimit({ windowMs: 15 * 60_000, limit: 10, standardHeaders: "draft-8", legacyHeaders: false }),
+    rateLimit({
+      windowMs: 15 * 60_000,
+      limit: 10,
+      standardHeaders: "draft-8",
+      legacyHeaders: false,
+      keyGenerator: loginAccountKey,
+    }),
+  );
   app.use("/api/v1/public/status", rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: "draft-8", legacyHeaders: false }));
   app.use(/^\/api\/v1\/admin\/backups\/[^/]+\/(?:download|restore)$/u,
     rateLimit({ windowMs: 15 * 60_000, limit: 20, standardHeaders: "draft-8", legacyHeaders: false }));

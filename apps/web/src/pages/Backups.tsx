@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { api, ApiError } from "../api";
 import { backups, type BackupEntry, type BackupJob, type BackupPolicy } from "../backup-api";
 import { PageHeader } from "../components";
+import { errorText } from "../error-messages";
 import "../backup-i18n";
 
 type Action = "create" | "import" | "edit" | "download" | "restore" | "delete";
@@ -36,10 +37,6 @@ export function BackupsPage() {
   const [preview, setPreview] = useState<BackupEntry | null>(null);
   const [reconnecting, setReconnecting] = useState(false);
   useEffect(() => { if (policy.data) setDraft(policy.data); }, [policy.data]);
-  const errorText = (value: unknown): string => {
-    const code = value instanceof Error ? value.message : String(value);
-    return t(`backup.errors.${code}`, { defaultValue: /^BACKUP_/u.test(code) ? t("backup.failed") : code });
-  };
   useEffect(() => {
     if (!job || job.status !== "running") return;
     let stopped = false;
@@ -57,7 +54,7 @@ export function BackupsPage() {
             const entries = await backups.list();
             if (!stopped) setPreview(entries.find((entry) => entry.id === next.backupId) ?? null);
           }
-        } else if (next.status === "failed") setError(errorText(new Error(next.error)));
+        } else if (next.status === "failed") setError(errorText(next.error, "备份操作失败，请检查服务日志后重试。"));
         // Updating the terminal status tears down this effect. Finish import
         // preview loading first, rather than cancelling our own async callback.
         if (!stopped) setJob(next);
@@ -89,7 +86,7 @@ export function BackupsPage() {
     if (action === "create") started = await backups.create(name.trim(), note);
     if (action === "import") {
       if (!file) return;
-      if (file.size > (policy.data?.uploadMaxBytes ?? 1024 ** 3)) throw new Error(t("backup.uploadTooLarge"));
+      if (file.size > (policy.data?.uploadMaxBytes ?? 1024 ** 3)) throw new Error(t("backup.uploadTooLarge", { lng: "zh-CN" }));
       started = await backups.import(file, secret, name.trim());
     }
     if (action === "edit" && selected) await backups.update(selected.id, name.trim(), note);
@@ -102,7 +99,7 @@ export function BackupsPage() {
   });
   const savePolicy = () => run(async () => {
     if (!draft) return;
-    if ((password || passwordConfirm) && (password.length < 12 || password !== passwordConfirm)) throw new Error(t("backup.passwordMismatch"));
+    if ((password || passwordConfirm) && (password.length < 12 || password !== passwordConfirm)) throw new Error(t("backup.passwordMismatch", { lng: "zh-CN" }));
     const { passwordConfigured: _configured, uploadMaxBytes: _limit, ...options } = draft;
     await backups.savePolicy({ ...options, ...(password ? { password } : {}) });
     setPassword(""); setPasswordConfirm(""); setMessage(t("backup.saved"));
@@ -112,7 +109,7 @@ export function BackupsPage() {
   const date = (value?: string) => value ? new Date(value).toLocaleString(i18n.language) : "—";
   if (api.isDemo) return <Alert severity="info">{t("backup.demo")}</Alert>;
   if (me.isPending) return <Skeleton variant="rounded" height={240} />;
-  if (!permitted) return <Alert severity="warning">{t("backup.forbidden")}</Alert>;
+  if (!permitted) return <Alert severity="warning">{t("backup.forbidden", { lng: "zh-CN" })}</Alert>;
   return <>
     <PageHeader title={t("backup.title")} subtitle={t("backup.subtitle")} action={<Stack direction="row" gap={1} flexWrap="wrap">
       <Button startIcon={<ScheduleOutlined />} onClick={() => setPolicyOpen(true)}>{t("backup.policy")}</Button>
@@ -122,7 +119,7 @@ export function BackupsPage() {
     <Stack gap={2.5}>
       <Alert severity="warning">{t("backup.warning")}</Alert>
       {!policy.data?.passwordConfigured && policy.isSuccess && <Alert severity="info" action={<Button size="small" onClick={() => setPolicyOpen(true)}>{t("backup.policy")}</Button>}>{t("backup.setup")}</Alert>}
-      {(error || list.error || policy.error) && <Alert severity="error" onClose={() => setError("")}>{error || errorText(list.error ?? policy.error)}</Alert>}
+      {(error || list.error || policy.error) && <Alert severity="error" onClose={() => setError("")}>{error || errorText(list.error ?? policy.error, "无法读取备份信息，请稍后重试。")}</Alert>}
       {message && <Alert severity="success" onClose={() => setMessage("")}>{message}</Alert>}
       {job?.status === "running" && <Paper variant="outlined" sx={{ p: 2.5 }} aria-live="polite"><Typography fontWeight={650} sx={{ mb: 1.5 }}>{reconnecting ? t("backup.reconnect") : t(`backup.${job.type === "restore" ? "restoring" : job.type === "import" ? "importing" : "creating"}`)}</Typography><LinearProgress /></Paper>}
       <Stack direction="row" justifyContent="space-between" alignItems="center"><Typography variant="h2">{t("backup.history")}</Typography><Chip size="small" variant="outlined" label={list.data?.length ?? 0} /></Stack>
@@ -130,12 +127,12 @@ export function BackupsPage() {
         list.data?.map((entry) => <Paper component="article" variant="outlined" key={entry.id} sx={{ p: { xs: 2, sm: 2.5 } }}>
           <Stack direction={{ xs: "column", sm: "row" }} gap={1.5} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }}>
             <Box sx={{ minWidth: 0 }}><Typography fontWeight={700} sx={{ overflowWrap: "anywhere" }}>{entry.name}</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, overflowWrap: "anywhere" }}>{entry.note || t("backup.noNote")}</Typography></Box>
-            <Stack direction="row" gap={1}><Chip size="small" variant="outlined" label={t(`backup.sources.${entry.source}`)} /><Chip size="small" color={entry.status === "ready" ? "success" : entry.status === "failed" ? "error" : "info"} label={t(`backup.statuses.${entry.status}`)} /></Stack>
+            <Stack direction="row" gap={1}><Chip size="small" variant="outlined" label={t(`backup.sources.${entry.source}`)} /><Chip size="small" color={entry.status === "ready" ? "success" : entry.status === "failed" ? "error" : "info"} label={t(`backup.statuses.${entry.status}`, entry.status === "failed" ? { lng: "zh-CN" } : {})} /></Stack>
           </Stack>
           <Box component="dl" sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", md: "repeat(4, minmax(0, 1fr))" }, gap: 2, my: 2.5, fontVariantNumeric: "tabular-nums" }}>
             {[["createdAt", date(entry.createdAt)], ["dataTime", date(entry.dataTime)], ["size", bytes(entry.size)], ["version", `v${entry.formatVersion}`]].map(([label, value]) => <Box key={label}><Typography component="dt" variant="caption" color="text.secondary">{t(`backup.${label}`)}</Typography><Typography component="dd" variant="body2" sx={{ m: 0, mt: 0.5, overflowWrap: "anywhere" }}>{value}</Typography></Box>)}
           </Box>
-          {entry.error && <Alert severity="error" sx={{ mb: 2 }}>{errorText(new Error(entry.error))}</Alert>}
+          {entry.error && <Alert severity="error" sx={{ mb: 2 }}>{errorText(entry.error, "备份操作失败，请检查服务日志后重试。")}</Alert>}
           <Divider /><Stack direction="row" flexWrap="wrap" gap={0.5} sx={{ mt: 1.5 }}>
             <Button size="small" onClick={() => setPreview(entry)} startIcon={<MoreHorizOutlined />}>{t("backup.details")}</Button>
             <Button size="small" disabled={processing} onClick={() => open("edit", entry)}>{t("backup.edit")}</Button>

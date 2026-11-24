@@ -65,6 +65,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, type Monitor, type MonitorType } from "../api";
 import { PageHeader, RelativeTime, StatusChip } from "../components";
+import { errorText } from "../error-messages";
 import { MonitorEditorDialog } from "../typed-forms";
 import {
   feedbackMessage,
@@ -617,7 +618,7 @@ function ConnectedMonitorDetails({
       ? "成功"
       : latestResult.statusCode
         ? `HTTP ${latestResult.statusCode}`
-        : latestResult.errorCode || "失败"
+        : "失败"
     : "尚无结果";
   return (
     <Drawer
@@ -759,7 +760,7 @@ function ConnectedMonitorDetails({
                 : `${activeMonitor.latencyMs} ms`}
             </Typography>
           </Stack>
-          {latestResult?.errorMessage && (
+          {latestResult && (latestResult.errorCode || latestResult.errorMessage) && (
             <Stack
               direction="row"
               justifyContent="space-between"
@@ -768,7 +769,7 @@ function ConnectedMonitorDetails({
             >
               <Typography color="text.secondary">错误</Typography>
               <Typography textAlign="right">
-                {latestResult.errorMessage}
+                {errorText(latestResult.errorCode || latestResult.errorMessage, "探测失败，可前往运行日志查看原始详情。")}
               </Typography>
             </Stack>
           )}

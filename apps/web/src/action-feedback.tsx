@@ -86,7 +86,7 @@ function FeedbackItem({
   item: Feedback;
   onRemove: (id: number) => void;
 }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [open, setOpen] = useState(true);
   const remaining = useRef(noticeDuration(item.severity));
   const startedAt = useRef<number | null>(null);
@@ -158,15 +158,16 @@ function FeedbackItem({
       document.removeEventListener("visibilitychange", syncVisibility);
   }, [pause, resume]);
 
-  const locale = i18n.resolvedLanguage ?? i18n.language;
   const translate = useCallback(
     (key: string, values?: Record<string, string | number>) =>
       String(t(key, values)),
     [t],
   );
-  const message = resolveFeedbackMessage(item.message, locale, translate);
+  const message = resolveFeedbackMessage(item.message, (key, values) =>
+    item.severity === "error" ? String(t(key, { ...values, lng: "zh-CN" })) : translate(key, values),
+  );
   const actionLabel = item.actionLabel
-    ? resolveFeedbackMessage(item.actionLabel, locale, translate)
+    ? resolveFeedbackMessage(item.actionLabel, translate)
     : String(t("feedback.view"));
 
   return (

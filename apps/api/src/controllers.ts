@@ -8,7 +8,7 @@ import { z } from "zod";
 import { PERMISSIONS, credentialInputSchema, monitorInputSchema, workflowInputSchema, type CredentialInput, type Permission, type WorkflowRunSummary } from "@netsentinel/contracts";
 import { encryptSecret } from "@netsentinel/core";
 import { ApprovalStatus, CredentialType, IncidentStatus, MonitorStatus, Prisma, RunStatus, TriggerType } from "@netsentinel/database";
-import { AuthService, Public, RequirePermissions, type AuthenticatedRequest, digest, hashPassword } from "./auth.js";
+import { AllowPasswordChangeRequired, AuthService, Public, RequirePermissions, type AuthenticatedRequest, digest, hashPassword } from "./auth.js";
 import { PrismaService } from "./prisma.service.js";
 import { EventStreamService, QueueService, metrics } from "./services.js";
 import { readAvatar, removeAvatar, saveAvatar } from "./avatar-storage.js";
@@ -94,12 +94,34 @@ export class AuthController {
     response.cookie("netsentinel_session", result.session, { httpOnly: true, secure: process.env.NODE_ENV === "production" && process.env.COOKIE_SECURE !== "false", sameSite: "lax", maxAge: 8 * 60 * 60 * 1_000, path: "/" });
     return { user: result.principal, csrfToken: result.csrf };
   }
-  @Post("logout") async logout(@Req() request: AuthenticatedRequest, @Res({ passthrough: true }) response: Response) {
+  @Post("logout") @AllowPasswordChangeRequired()
+  async logout(@Req() request: AuthenticatedRequest, @Res({ passthrough: true }) response: Response) {
     await this.auth.logout(request.cookies?.netsentinel_session as string | undefined);
     response.clearCookie("netsentinel_session", { path: "/" });
     return { ok: true };
   }
-  @Get("me") me(@Req() request: AuthenticatedRequest) { return { user: request.principal }; }
+  @Get("me") @AllowPasswordChangeRequired()
+  me(@Req() request: AuthenticatedRequest) { return { user: request.principal }; }
+  @Post("me/password") @AllowPasswordChangeRequired()
+  async changePassword(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
+    const input = parse(
+      z.object({
+        currentPassword: z.string().min(1),
+        newPassword: z.string().min(12),
+      }),
+      body,
+    );
+    if (request.principal!.authentication !== "session" || !request.sessionIdHash) {
+      throw new ForbiddenException("Password changes require a session");
+    }
+    await this.auth.changePassword(
+      request.principal!.id,
+      input.currentPassword,
+      input.newPassword,
+      request.sessionIdHash,
+    );
+    return { ok: true };
+  }
   @Patch("me")
   async updateProfile(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
     const input = parse(z.object({ displayName: z.string().trim().min(1).max(120) }), body);

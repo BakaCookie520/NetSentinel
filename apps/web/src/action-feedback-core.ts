@@ -1,4 +1,5 @@
 import type { RunStatus } from "@netsentinel/contracts";
+import { errorText } from "./error-messages";
 
 export type FeedbackSeverity = "success" | "error" | "warning" | "info";
 export type FeedbackMessageKey = `feedback.${string}`;
@@ -7,7 +8,7 @@ export type FeedbackValues = Record<string, string | number>;
 export type LocalizedMessage = {
   key: FeedbackMessageKey;
   values?: FeedbackValues;
-  englishDetail?: string;
+  text?: string;
 };
 
 export type ActionNotice = {
@@ -15,11 +16,6 @@ export type ActionNotice = {
   message: LocalizedMessage;
   href?: string;
   actionLabel?: LocalizedMessage;
-};
-
-type ErrorShape = Error & {
-  status?: number;
-  problemTitle?: string;
 };
 
 export function feedbackMessage(
@@ -42,44 +38,19 @@ export function removeNoticeById<T extends { id: number }>(
   return items.filter((item) => item.id !== id);
 }
 
-function errorMessageKey(status?: number): FeedbackMessageKey {
-  if (status === 400 || status === 422) return "feedback.error.badRequest";
-  if (status === 401) return "feedback.error.unauthorized";
-  if (status === 403) return "feedback.error.forbidden";
-  if (status === 404) return "feedback.error.notFound";
-  if (status === 409) return "feedback.error.conflict";
-  if (status === 429) return "feedback.error.rateLimited";
-  if (status !== undefined && status >= 500) return "feedback.error.server";
-  return "feedback.error.unknown";
-}
-
 export function formatActionError(
   error: unknown,
   fallback?: LocalizedMessage,
 ): LocalizedMessage {
   if (fallback) return fallback;
-  if (!(error instanceof Error)) return feedbackMessage("feedback.error.unknown");
-
-  const shaped = error as ErrorShape;
-  const key =
-    shaped.name === "TypeError" && shaped.status === undefined
-      ? "feedback.error.network"
-      : errorMessageKey(shaped.status);
-  return {
-    key,
-    ...(error.message ? { englishDetail: error.message } : {}),
-  };
+  return { key: "feedback.error.unknown", text: errorText(error) };
 }
 
 export function resolveFeedbackMessage(
   message: LocalizedMessage,
-  locale: string,
   translate: (key: string, values?: FeedbackValues) => string,
 ): string {
-  if (locale.toLowerCase().startsWith("en") && message.englishDetail) {
-    return message.englishDetail;
-  }
-  return translate(message.key, message.values);
+  return message.text ?? translate(message.key, message.values);
 }
 
 export function terminalFeedback(

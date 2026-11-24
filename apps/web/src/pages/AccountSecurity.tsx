@@ -3,6 +3,7 @@ import { Alert, Box, Button, Checkbox, Dialog, DialogActions, DialogContent, Dia
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "../components";
+import { errorText } from "../error-messages";
 import { onboarding, type SecurityDraft } from "../onboarding-api";
 import { SecurityInformation } from "./Onboarding";
 
@@ -12,13 +13,13 @@ export function AccountSecurityPage() {
   const [password, setPassword] = useState(""); const [code, setCode] = useState("");
   const [draft, setDraft] = useState<SecurityDraft>(); const [result, setResult] = useState<{ recoveryKey?: string; backupCodes?: string[] }>();
   const [saved, setSaved] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
-  const run = async (operation: () => Promise<void>) => { setBusy(true); setError(""); try { await operation(); await query.refetch(); } catch (error) { setError(error instanceof Error ? error.message : String(error)); } finally { setBusy(false); } };
+  const run = async (operation: () => Promise<void>) => { setBusy(true); setError(""); try { await operation(); await query.refetch(); } catch (error) { setError(errorText(error, "无法更新账户安全设置，请稍后重试。")); } finally { setBusy(false); } };
   const rotate = (target: "recovery" | "backup" | "disable") => run(async () => { const result = await onboarding.rotate(password, target, code); if (target !== "disable") { setResult(result); setSaved(false); } setCode(""); setPassword(""); });
   return <>
     <PageHeader title={t("onboarding.accountSecurity")} subtitle={t("onboarding.securityHint")} />
     <Paper variant="outlined" sx={{ p: { xs: 2.5, md: 3 }, maxWidth: 680 }}><Stack gap={2.5}>
       {!query.data?.recoveryConfigured && <Alert severity="info">{t("onboarding.optionalSecurity")}</Alert>}
-      {(error || query.error) && <Alert severity="error">{error || query.error?.message}</Alert>}
+      {(error || query.error) && <Alert severity="error">{error || errorText(query.error, "无法读取账户安全设置，请稍后重试。")}</Alert>}
       <Typography>{t("onboarding.enableTotp")}: {query.data?.totpEnabled ? t("onboarding.configured") : t("onboarding.notConfigured")}</Typography>
       <Typography>{t("onboarding.recovery")}: {query.data?.recoveryConfigured ? t("onboarding.configured") : t("onboarding.notConfigured")}</Typography>
       <TextField type="password" label={t("onboarding.currentPassword")} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} />

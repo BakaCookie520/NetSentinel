@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./execution": "./dist/execution.js"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "node --watch --env-file-if-exists=../../.env --import tsx src/main.ts",
@@ -17,7 +20,7 @@
     "bullmq": "^5.58.5",
     "cron-parser": "^5.3.1",
     "ioredis": "^5.7.0",
-    "nodemailer": "^7.0.6",
+    "nodemailer": "^9.0.5",
     "ssh2": "^1.17.0",
     "undici": "^7.16.0"
   },
@@ -28,8 +31,5 @@
     "tsx": "^4.20.5",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
-  },
-  "exports": {
-    "./execution": "./dist/execution.js"
   }
 }

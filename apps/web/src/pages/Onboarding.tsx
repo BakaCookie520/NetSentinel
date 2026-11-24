@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Alert, Box, Button, Checkbox, FormControlLabel, LinearProgress, MenuItem, Paper, Stack, Step, StepLabel, Stepper, Switch, TextField, Typography } from "@mui/material";
 import { useTranslation } from "react-i18next";
 import { ApiError, type CurrentUser } from "../api";
+import { errorText } from "../error-messages";
 import { onboarding, setupRequest, acceptLogin, type LoginResult, type SecurityDraft, type SetupStatus } from "../onboarding-api";
 import "../onboarding-i18n";
 
@@ -44,7 +45,7 @@ export function OnboardingPage({ status, onComplete }: { status: SetupStatus; on
     setBusy(true); setError("");
     try { await operation(); } catch (error) {
       if (error instanceof ApiError && error.message === "SETUP_EXISTING_SITE") setExisting(true);
-      setError(error instanceof Error ? error.message : String(error));
+      setError(errorText(error, "初始化操作失败，请检查填写的信息后重试。"));
     } finally { setBusy(false); }
   };
   const unlock = () => run(async () => {

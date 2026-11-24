@@ -46,6 +46,7 @@ import {
   type RuntimeLogStatus,
 } from "../api";
 import { PageHeader } from "../components";
+import { errorText } from "../error-messages";
 import { feedbackMessage, useActionFeedback } from "../action-feedback";
 
 type SourceFilter = "ALL" | RuntimeLogSource;
@@ -196,7 +197,7 @@ function LogDetails({ log }: { log: RuntimeLog }) {
             <DetailField label="HTTP 状态码" value={log.details.statusCode} />
             <DetailField label="错误代码" value={log.details.errorCode} />
           </Box>
-          {log.details.errorMessage && (
+          {(log.details.errorCode || log.details.errorMessage) && (
             <Box>
               <Typography
                 variant="caption"
@@ -206,7 +207,8 @@ function LogDetails({ log }: { log: RuntimeLog }) {
               >
                 错误详情
               </Typography>
-              <LogBlock>{log.details.errorMessage}</LogBlock>
+              <Typography variant="body2">{errorText(log.details.errorCode || log.details.errorMessage, "探测失败，请检查监控配置和目标服务。")}</Typography>
+              {log.details.errorMessage && <LogBlock>{log.details.errorMessage}</LogBlock>}
             </Box>
           )}
         </>
@@ -254,6 +256,7 @@ function LogDetails({ log }: { log: RuntimeLog }) {
                     </Stack>
                     {step.errorMessage && (
                       <Box sx={{ mt: 1 }}>
+                        <Typography variant="body2">{errorText(step.errorMessage, "步骤执行失败，请查看下方原始详情。")}</Typography>
                         <LogBlock>{step.errorMessage}</LogBlock>
                       </Box>
                     )}
@@ -486,7 +489,7 @@ export function LogsPage() {
 
       {query.error && (
         <Alert severity="error" sx={{ mb: 2 }}>
-          {query.error instanceof Error ? query.error.message : "日志加载失败"}
+          {errorText(query.error, "日志加载失败，请稍后重试。")}
         </Alert>
       )}
 

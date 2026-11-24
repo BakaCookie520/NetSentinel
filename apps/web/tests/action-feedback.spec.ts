@@ -143,7 +143,7 @@ test("manual workflow reports queueing, terminal status, and exact log", async (
   });
 });
 
-test("failed row command shows Problem Details and becomes usable again", async ({
+test("failed row command stays in Chinese and becomes usable again", async ({
   page,
 }, testInfo) => {
   await login(page);
@@ -172,9 +172,10 @@ test("failed row command shows Problem Details and becomes usable again", async 
   ).toBeHidden();
   await page.getByRole("button", { name: "切换语言" }).click();
   await page.getByRole("menuitem", { name: "English" }).click();
+  await expect(localizedError).toBeVisible();
   await expect(
     page.getByText("Workflow has execution history and cannot be deleted"),
-  ).toBeVisible();
+  ).toBeHidden();
   await page.getByRole("button", { name: "Switch language" }).click();
   await page.getByRole("menuitem", { name: "简体中文" }).click();
   await expect(localizedError).toBeVisible();

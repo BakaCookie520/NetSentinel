@@ -10,6 +10,8 @@ import { RESTORE_GATE } from "./backup-types.js";
 
 export const Public = () => SetMetadata("public", true);
 export const RequirePermissions = (...permissions: Permission[]) => SetMetadata("permissions", permissions);
+export const AllowPasswordChangeRequired = () =>
+  SetMetadata("allowPasswordChangeRequired", true);
 
 export interface Principal {
   id: string;
@@ -18,9 +20,14 @@ export interface Principal {
   avatarUrl: string | null;
   permissions: Permission[];
   authentication: "session" | "token";
+  forcePasswordChange: boolean;
 }
 
-export type AuthenticatedRequest = Request & { principal?: Principal; sessionCsrfHash?: string };
+export type AuthenticatedRequest = Request & {
+  principal?: Principal;
+  sessionCsrfHash?: string;
+  sessionIdHash?: string;
+};
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 
 export async function hashPassword(password: string): Promise<string> {
@@ -41,6 +48,7 @@ export class AuthService {
       email: string;
       displayName: string;
       avatarKey: string | null;
+      forcePasswordChange: boolean;
       roles: Array<{ role: { permissions: string[] } }>;
     },
     authentication: "session" | "token",
@@ -58,6 +66,7 @@ export class AuthService {
       avatarUrl: avatarUrl(user.avatarKey),
       permissions,
       authentication,
+      forcePasswordChange: user.forcePasswordChange,
     };
   }
 
@@ -72,6 +81,36 @@ export class AuthService {
 
   async logout(session: string | undefined): Promise<void> {
     if (session) await this.prisma.session.deleteMany({ where: { idHash: digest(session) } });
+  }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+    currentSessionIdHash: string,
+  ): Promise<void> {
+    if (currentPassword === newPassword) {
+      throw new ForbiddenException("New password must differ from the current password");
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { passwordHash: true },
+    });
+    if (!user || !(await verify(user.passwordHash, currentPassword))) {
+      throw new ForbiddenException("Current password is incorrect");
+    }
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          passwordHash: await hashPassword(newPassword),
+          forcePasswordChange: false,
+        },
+      }),
+      this.prisma.session.deleteMany({
+        where: { userId, idHash: { not: currentSessionIdHash } },
+      }),
+    ]);
   }
 }
 
@@ -99,6 +138,13 @@ export class AuthGuard implements CanActivate {
     if (/^\/api\/v1\/admin\/backups(?:\/|$)/u.test(request.originalUrl ?? "") && principal.authentication !== "session") throw new ForbiddenException("BACKUP_SESSION_REQUIRED");
     request.principal = principal;
     this.assertCsrf(request, principal);
+    const allowPasswordChangeRequired = this.reflector.getAllAndOverride<boolean>(
+      "allowPasswordChangeRequired",
+      [context.getHandler(), context.getClass()],
+    );
+    if (principal.forcePasswordChange && !allowPasswordChangeRequired) {
+      throw new ForbiddenException("Password change is required");
+    }
     const required = this.reflector.getAllAndOverride<Permission[]>("permissions", [context.getHandler(), context.getClass()]) ?? [];
     if (!required.every((permission) => principal.permissions.includes(permission))) throw new ForbiddenException("Missing permission");
     return true;
@@ -110,6 +156,7 @@ export class AuthGuard implements CanActivate {
     const session = await this.prisma.session.findUnique({ where: { idHash: digest(raw) }, include: { user: { include: { roles: { include: { role: true } } } } } });
     if (!session || session.expiresAt <= new Date() || session.user.disabledAt) return undefined;
     request.sessionCsrfHash = session.csrfHash;
+    request.sessionIdHash = session.idHash;
     return this.auth.principal(session.user, "session");
   }
 

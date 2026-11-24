@@ -16,7 +16,7 @@ export function SettingsLayout() {
   const location = useLocation();
   const me = useQuery({ queryKey: ["current-user"], queryFn: api.me });
   if (me.isPending) return <Skeleton variant="rounded" height={180} />;
-  if (!me.data) return <Alert severity="error">{t("settingsNavigation.loadError")}</Alert>;
+  if (!me.data) return <Alert severity="error">{t("settingsNavigation.loadError", { lng: "zh-CN" })}</Alert>;
 
   const user = me.data.user;
   const available = sections.filter((section) =>
@@ -57,6 +57,6 @@ export function SettingsLayout() {
         </Stack>
       </Button>)}
     </Box>
-    {allowed ? <Outlet /> : <Alert severity="warning">{t("settingsNavigation.forbidden")}</Alert>}
+    {allowed ? <Outlet /> : <Alert severity="warning">{t("settingsNavigation.forbidden", { lng: "zh-CN" })}</Alert>}
   </>;
 }

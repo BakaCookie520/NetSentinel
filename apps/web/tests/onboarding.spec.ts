@@ -1,6 +1,23 @@
 import { expect, test } from "@playwright/test";
 
 test.use({ storageState: { cookies: [], origins: [] } });
+
+test("installation explains an origin rejection in Chinese even in English mode", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("netsentinel.locale", "en-US"));
+  await page.route("**/api/v1/setup/status", (route) => route.fulfill({
+    json: { initialized: false, step: 0, database: null },
+  }));
+  await page.route("**/api/v1/setup/unlock", (route) => route.fulfill({
+    status: 403,
+    json: { detail: "ORIGIN_NOT_ALLOWED" },
+  }));
+  await page.goto("/");
+  await page.getByLabel("One-time installation token").fill("test-installation-token");
+  await page.getByRole("button", { name: "Verify installation token" }).click();
+  await expect(page.getByText(/当前访问地址未获允许.*WEB_ORIGIN/)).toBeVisible();
+  await expect(page.getByText("ORIGIN_NOT_ALLOWED", { exact: true })).toHaveCount(0);
+});
+
 test("four-step installation supports optional 2FA and mandatory recovery acknowledgement", async ({ page }, testInfo) => {
   let step = 0; let finished = false; let acknowledged = false;
   const user = { id: "setup-owner", email: "owner@example.com", displayName: "Owner", avatarUrl: null, permissions: ["monitor:read", "backup:manage"], authentication: "session", forcePasswordChange: false };

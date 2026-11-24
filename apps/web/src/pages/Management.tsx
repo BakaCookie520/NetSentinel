@@ -65,6 +65,7 @@ import {
   type Workflow,
 } from "../api";
 import { PageHeader, RelativeTime } from "../components";
+import { validationSummary } from "../error-messages";
 import { ErrorAlert, WorkflowEditorDialog } from "../typed-forms";
 import {
   feedbackMessage,
@@ -419,11 +420,7 @@ function CredentialDialog({
   const submit = () => {
     const parsed = credentialInputSchema.safeParse(credentialPayload(draft));
     if (!parsed.success) {
-      setValidation(
-        parsed.error.issues
-          .map((issue) => `${issue.path.join(".")}：${issue.message}`)
-          .join("；"),
-      );
+      setValidation(validationSummary(parsed.error.issues));
       return;
     }
     mutation.mutate(parsed.data);

@@ -38,13 +38,13 @@ import {
   type WorkflowStepInput,
 } from "@netsentinel/contracts";
 import {
-  ApiError,
   api,
   type Credential,
   type Monitor,
   type MonitorType,
   type Workflow,
 } from "./api";
+import { errorText, validationSummary, validationText } from "./error-messages";
 import { feedbackMessage, useCommandMutation } from "./action-feedback";
 import { compatibleCredentialTypes } from "./credential-types";
 
@@ -102,11 +102,7 @@ function NetworkCredentialDialog({
             : { name, type, token: secret, placement, queryParamName };
     const parsed = credentialInputSchema.safeParse(payload);
     if (!parsed.success) {
-      setValidation(
-        parsed.error.issues
-          .map((issue) => `${issue.path.join(".")}：${issue.message}`)
-          .join("；"),
-      );
+      setValidation(validationSummary(parsed.error.issues));
       return;
     }
     mutation.mutate(parsed.data as CredentialInput);
@@ -232,17 +228,7 @@ function NetworkCredentialDialog({
 
 export function ErrorAlert({ error }: { error: unknown }) {
   if (!error) return null;
-  const apiError = error instanceof ApiError ? error : null;
-  const message =
-    apiError?.message ?? (error instanceof Error ? error.message : "操作失败");
-  return (
-    <Alert severity="error">
-      {message}
-      {apiError?.errors.length
-        ? `：${apiError.errors.map((item) => `${item.path} ${item.message}`).join("；")}`
-        : ""}
-    </Alert>
-  );
+  return <Alert severity="error">{errorText(error)}</Alert>;
 }
 
 export function KeyValueEditor({
@@ -562,7 +548,7 @@ export function MonitorEditorDialog({
           nextErrors[path] ??= monitorIssueMessage(
             path,
             draft.type,
-            issue.message,
+            validationText(issue),
           );
         }
         setFieldErrors(nextErrors);
@@ -1432,11 +1418,7 @@ export function WorkflowEditorDialog({
   const submit = () => {
     const parsed = workflowInputSchema.safeParse(draft);
     if (!parsed.success) {
-      setValidation(
-        parsed.error.issues
-          .map((issue) => `${issue.path.join(".")}：${issue.message}`)
-          .join("；"),
-      );
+      setValidation(validationSummary(parsed.error.issues));
       return;
     }
     mutation.mutate(parsed.data);

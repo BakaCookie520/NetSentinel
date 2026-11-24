@@ -16,6 +16,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, type CurrentUser } from "./api";
 import i18n from "./i18n";
+import { errorText } from "./error-messages";
 import {
   buildTheme,
   getStoredThemeColor,
@@ -95,8 +96,8 @@ function LoginPage({ onLogin }: { onLogin: (user: CurrentUser) => void }) {
       sessionStorage.setItem("netsentinel.user", JSON.stringify(user));
       window.dispatchEvent(new CustomEvent("netsentinel:user", { detail: user }));
       onLogin(user);
-    } catch {
-      setError("无法登录，请检查账号、密码和 API 连接。");
+    } catch (error) {
+      setError(`无法登录。${errorText(error, "请检查账号、密码和 API 连接。")}`);
     } finally {
       setBusy(false);
     }
@@ -179,7 +180,7 @@ function PasswordChangePage({
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (newPassword !== confirmation) {
-      setError("New passwords do not match.");
+      setError("两次输入的新密码不一致。");
       return;
     }
     setBusy(true);
@@ -192,8 +193,8 @@ function PasswordChangePage({
         new CustomEvent("netsentinel:user", { detail: result.user }),
       );
       onComplete(result.user);
-    } catch {
-      setError("Unable to change the password. Verify your current password and try again.");
+    } catch (error) {
+      setError(`无法修改密码。${errorText(error, "请核对当前密码后重试。")}`);
     } finally {
       setBusy(false);
     }
@@ -334,7 +335,7 @@ export function App() {
     <ThemeProvider theme={buildTheme(mode, themeColor)}>
       <CssBaseline />
       {!api.isDemo && setupQuery.isPending ? <Box sx={{ p: 4 }}><Typography>NetSentinel…</Typography></Box> :
-      !api.isDemo && setupQuery.isError ? <Box sx={{ p: 4 }}><Alert severity="error">{setupQuery.error.message}</Alert><Button onClick={() => void setupQuery.refetch()}>{i18n.t("onboarding.retry")}</Button></Box> :
+      !api.isDemo && setupQuery.isError ? <Box sx={{ p: 4 }}><Alert severity="error">{errorText(setupQuery.error, "无法读取初始化状态，请稍后重试。")}</Alert><Button onClick={() => void setupQuery.refetch()}>{i18n.t("onboarding.retry")}</Button></Box> :
       !api.isDemo && setupQuery.data && !setupQuery.data.initialized ? <OnboardingPage status={setupQuery.data} onComplete={(user) => {
         setPasswordChangeRequired(user.forcePasswordChange); setAuthenticated(true); void setupQuery.refetch();
       }} /> :

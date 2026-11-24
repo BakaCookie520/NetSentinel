@@ -23,20 +23,14 @@ describe("action feedback", () => {
     ]);
   });
 
-  it("localizes English server errors for simplified Chinese", () => {
+  it("renders Chinese error notices without exposing the server detail", () => {
     const error = Object.assign(new Error("An unexpected error occurred"), {
       status: 500,
       problemTitle: "INTERNAL_SERVER_ERROR",
     });
     const message = formatActionError(error);
-    const translate = (key: string) =>
-      ({ "feedback.error.server": "服务器发生异常，请稍后重试" })[key] ?? key;
-
-    expect(resolveFeedbackMessage(message, "zh-CN", translate)).toBe(
-      "服务器发生异常，请稍后重试",
-    );
-    expect(resolveFeedbackMessage(message, "en-US", translate)).toBe(
-      "An unexpected error occurred",
+    expect(resolveFeedbackMessage(message, () => "An unexpected error occurred")).toBe(
+      "服务器发生异常，请稍后重试。",
     );
   });
 

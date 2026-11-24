@@ -52,6 +52,7 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { api, type CurrentUser } from "./api";
+import { errorText } from "./error-messages";
 import type { ThemePreference } from "./theme-preference";
 
 const drawerWidth = 264;
@@ -181,18 +182,18 @@ export function Shell({
     try {
       syncUser((await api.updateProfile(draftDisplayName)).user);
     } catch (error) {
-      setProfileError(error instanceof Error ? error.message : t("profile.saveError"));
+      setProfileError(errorText(error, "资料保存失败，请稍后重试。"));
     } finally {
       setProfileBusy(false);
     }
   };
   const uploadAvatar = async (file: File) => {
     if (file.size > 2 * 1024 * 1024) {
-      setProfileError(t("profile.avatarTooLarge"));
+      setProfileError(t("profile.avatarTooLarge", { lng: "zh-CN" }));
       return;
     }
     if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
-      setProfileError(t("profile.avatarInvalid"));
+      setProfileError(t("profile.avatarInvalid", { lng: "zh-CN" }));
       return;
     }
     setProfileBusy(true);
@@ -200,7 +201,7 @@ export function Shell({
     try {
       syncUser((await api.uploadAvatar(file)).user);
     } catch (error) {
-      setProfileError(error instanceof Error ? error.message : t("profile.avatarError"));
+      setProfileError(errorText(error, "头像上传失败，请稍后重试。"));
     } finally {
       setProfileBusy(false);
       if (fileInput.current) fileInput.current.value = "";
@@ -212,7 +213,7 @@ export function Shell({
     try {
       syncUser((await api.deleteAvatar()).user);
     } catch (error) {
-      setProfileError(error instanceof Error ? error.message : t("profile.avatarError"));
+      setProfileError(errorText(error, "头像移除失败，请稍后重试。"));
     } finally {
       setProfileBusy(false);
     }
